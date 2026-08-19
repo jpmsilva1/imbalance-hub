@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.claude/
+.DS_Store
+
+# scan outputs are handoff artifacts, not repo content;
+# catalog/*.csv in phase 2 MUST stay tracked
+/scan_results.csv
+/pilot*.csv
