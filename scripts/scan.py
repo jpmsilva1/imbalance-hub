@@ -38,7 +38,7 @@ CSV_COLUMNS = [
     "id", "source", "collection", "name", "granularity", "time_column", "length", "dtype", "content_hash",
     "N", "n_normal", "n_rare", "IR", "%Rare", "imbalance_level",
     "missing_pct", "mean", "std", "cv", "skewness", "kurtosis", "autocorr_lag1",
-    "adf_pvalue", "is_stationary", "status", "note",
+    "status", "note",
 ]
 
 # Params fixed to match Moniz, Branco & Torgo 2017.
@@ -84,7 +84,7 @@ def imbalance_level(n_rare, pct_rare):
     return "mild"
 
 
-def score_series(series: pd.Series, with_adf: bool) -> dict:
+def score_series(series: pd.Series) -> dict:
     """Embed + score a single numeric series. Returns a dict of CSV fields
     (everything except id/source/collection/name/granularity/time_column)."""
     missing_pct = round(100 * series.isna().mean(), 4)
@@ -94,7 +94,7 @@ def score_series(series: pd.Series, with_adf: bool) -> dict:
         "length": len(series), "dtype": str(series.dtype), "content_hash": content_hash(clean.values),
         "N": "", "n_normal": "", "n_rare": "", "IR": "", "%Rare": "", "imbalance_level": "",
         "missing_pct": missing_pct, "mean": "", "std": "", "cv": "", "skewness": "", "kurtosis": "",
-        "autocorr_lag1": "", "adf_pvalue": "", "is_stationary": "", "status": "error", "note": "",
+        "autocorr_lag1": "", "status": "error", "note": "",
     }
 
     if len(clean) < K + 2:
@@ -110,15 +110,6 @@ def score_series(series: pd.Series, with_adf: bool) -> dict:
     row["skewness"] = clean.skew()
     row["kurtosis"] = clean.kurtosis()
     row["autocorr_lag1"] = clean.autocorr(1)
-
-    if with_adf:
-        try:
-            from statsmodels.tsa.stattools import adfuller
-            pvalue = adfuller(clean)[1]
-            row["adf_pvalue"] = pvalue
-            row["is_stationary"] = pvalue < 0.05
-        except Exception as e:
-            row["note"] = f"adf failed: {e}"[:200]
 
     try:
         embedded = ie.time_delay_embedding(clean, k=K)
@@ -142,11 +133,11 @@ def score_series(series: pd.Series, with_adf: bool) -> dict:
     return row
 
 
-def build_row(id_, source, collection, name, granularity, time_column, series, with_adf):
+def build_row(id_, source, collection, name, granularity, time_column, series):
     base = {"id": id_, "source": source, "collection": collection, "name": name,
             "granularity": granularity, "time_column": time_column}
     try:
-        base.update(score_series(series, with_adf))
+        base.update(score_series(series))
     except Exception as e:
         # Last-resort catch so one pathological series never aborts a collection.
         base.update({c: "" for c in CSV_COLUMNS if c not in base})
@@ -162,8 +153,8 @@ def _build_row_star(args):
 def _score_tasks(tasks, workers):
     """Run build_row over a list of build_row-argument tuples, spread across
     worker processes -- each series is scored independently, so this is
-    embarrassingly parallel and (with --with-adf) CPU-bound enough to be
-    worth it. Falls back to sequential for workers<=1."""
+    embarrassingly parallel and worth it once there are enough series to
+    amortize process startup. Falls back to sequential for workers<=1."""
     if not tasks:
         return []
     if workers <= 1:
@@ -198,7 +189,56 @@ def error_row(source, collection, note):
     }
 
 
-def scan_gluonts(out_path, seen_ids, collections_filter, limit, with_adf, workers):
+def iter_gluonts_series(collection, entries, freq):
+    """Yield (id_, key, granularity, time_column, series) for each entry of
+    ds.train. One malformed entry is skipped (printed), not fatal -- shared by
+    scan.py and upload_blobs.py so both normalize identically."""
+    for n_seen, entry in enumerate(entries):
+        try:
+            # `is None` matters, not `or`: item_id can legitimately be 0, which
+            # `or` would treat as falsy and overwrite with the counter. Some
+            # datasets also set item_id to None explicitly, hence the check.
+            key = entry.get("item_id")
+            if key is None:
+                key = n_seen
+            series = pd.Series(np.asarray(entry["target"], dtype=float))
+        except Exception as e:
+            print(f"gluonts:{collection} SKIPPING bad entry #{n_seen}: {e}")
+            continue
+        id_ = make_id("gluonts", collection, key)
+        yield id_, key, freq, "", series
+
+
+def iter_tslib_series(collection, df):
+    """Yield (id_, key, granularity, time_column, series) for each numeric
+    column of a raw TSLib CSV DataFrame. Does the date parse -> sort -> drop
+    in here -- shared by scan.py and upload_blobs.py so both normalize
+    identically."""
+    date_col = "date" if "date" in df.columns else None
+    granularity = ""
+    index = None
+    if date_col:
+        # Parse to datetime BEFORE sorting. These files use non-zero-padded
+        # dates ("1990-1-2"), so sorting the raw strings puts 1990-1-10
+        # before 1990-1-2 and scrambles the whole series. Same order of
+        # operations as imbalance_eval.load_csv.
+        df = df.copy()
+        df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+        df = df.sort_values(date_col).reset_index(drop=True)
+        try:
+            granularity = pd.infer_freq(df[date_col]) or ""
+        except Exception:
+            granularity = ""
+        index = pd.DatetimeIndex(df[date_col])
+        df = df.drop(columns=[date_col])
+
+    for col in df.select_dtypes(include="number").columns:
+        id_ = make_id("tslib", collection, col)
+        series = pd.Series(df[col].to_numpy(), index=index) if index is not None else df[col]
+        yield id_, col, granularity, (date_col or ""), series
+
+
+def scan_gluonts(out_path, seen_ids, collections_filter, limit, workers):
     try:
         from gluonts.dataset.repository.datasets import get_dataset, dataset_names
     except ImportError:
@@ -223,16 +263,7 @@ def scan_gluonts(out_path, seen_ids, collections_filter, limit, with_adf, worker
 
         freq = getattr(ds.metadata, "freq", "")
         tasks = []
-        n_seen = 0
-        for entry in ds.train:
-            # `is None` matters, not `or`: item_id can legitimately be 0, which
-            # `or` would treat as falsy and overwrite with the counter. Some
-            # datasets also set item_id to None explicitly, hence the check.
-            key = entry.get("item_id")
-            if key is None:
-                key = n_seen
-            n_seen += 1
-            id_ = make_id("gluonts", name, key)
+        for id_, key, granularity, time_column, series in iter_gluonts_series(name, ds.train, freq):
             if id_ in seen_ids:
                 continue
             # Bound on NEW rows added this run, not on entries examined -- so
@@ -240,8 +271,7 @@ def scan_gluonts(out_path, seen_ids, collections_filter, limit, with_adf, worker
             # immediately exhausting the budget on already-scanned entries.
             if limit and len(tasks) >= limit:
                 break
-            series = pd.Series(np.asarray(entry["target"], dtype=float))
-            tasks.append((id_, "gluonts", name, str(key), freq, "", series, with_adf))
+            tasks.append((id_, "gluonts", name, str(key), granularity, time_column, series))
             seen_ids.add(id_)
 
         rows = _score_tasks(tasks, workers)
@@ -264,11 +294,11 @@ def read_tslib_csv(repo_path):
         return pd.read_csv(f"https://huggingface.co/datasets/{TSLIB_REPO}/resolve/main/{repo_path}")
 
 
-def scan_tslib(out_path, seen_ids, collections_filter, limit, with_adf, workers):
+def list_tslib_collections(collections_filter=None):
+    """{collection: repo_path} for every TSLib CSV under the in-scope folders,
+    shared by scan.py and upload_blobs.py so both resolve the same file."""
     from huggingface_hub import HfApi
-
-    api = HfApi()
-    files = api.list_repo_files(TSLIB_REPO, repo_type="dataset")
+    files = HfApi().list_repo_files(TSLIB_REPO, repo_type="dataset")
 
     by_collection = {}
     for f in files:
@@ -281,6 +311,11 @@ def scan_tslib(out_path, seen_ids, collections_filter, limit, with_adf, workers)
         if collections_filter and collection not in collections_filter:
             continue
         by_collection.setdefault(collection, f)  # one csv per collection expected
+    return by_collection
+
+
+def scan_tslib(out_path, seen_ids, collections_filter, limit, workers):
+    by_collection = list_tslib_collections(collections_filter)
 
     for collection, repo_path in by_collection.items():
         err_id = make_id("tslib", collection, "dataset")
@@ -295,26 +330,8 @@ def scan_tslib(out_path, seen_ids, collections_filter, limit, with_adf, workers)
             print(f"tslib:{collection} FAILED to download ({time.time() - t0:.1f}s): {e}")
             continue
 
-        date_col = "date" if "date" in df.columns else None
-        granularity = ""
-        if date_col:
-            # Parse to datetime BEFORE sorting. These files use non-zero-padded
-            # dates ("1990-1-2"), so sorting the raw strings puts 1990-1-10
-            # before 1990-1-2 and scrambles the whole series. Same order of
-            # operations as imbalance_eval.load_csv.
-            df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
-            df = df.sort_values(date_col).reset_index(drop=True)
-            try:
-                granularity = pd.infer_freq(df[date_col]) or ""
-            except Exception:
-                granularity = ""
-            df = df.drop(columns=[date_col])
-
-        numeric_cols = list(df.select_dtypes(include="number").columns)
-
         tasks = []
-        for col in numeric_cols:
-            id_ = make_id("tslib", collection, col)
+        for id_, key, granularity, time_column, series in iter_tslib_series(collection, df):
             if id_ in seen_ids:
                 continue
             # Bound on NEW rows added this run, not on column position -- so
@@ -322,7 +339,7 @@ def scan_tslib(out_path, seen_ids, collections_filter, limit, with_adf, workers)
             # re-slicing the same already-scanned leading columns.
             if limit and len(tasks) >= limit:
                 break
-            tasks.append((id_, "tslib", collection, col, granularity, date_col or "", df[col], with_adf))
+            tasks.append((id_, "tslib", collection, key, granularity, time_column, series))
             seen_ids.add(id_)
 
         rows = _score_tasks(tasks, workers)
@@ -348,7 +365,6 @@ def main():
     parser.add_argument("--source", choices=["gluonts", "tslib", "both"], default="both")
     parser.add_argument("--collections", default=None, help="comma-separated subset of collections")
     parser.add_argument("--limit", type=int, default=0, help="max series per collection, 0=all")
-    parser.add_argument("--with-adf", action="store_true", help="also run ADF stationarity test (~3x slower)")
     parser.add_argument("--resume", action="store_true", help="skip ids already present in --out")
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 1,
                          help="parallel worker processes for scoring (default: all cores)")
@@ -366,9 +382,9 @@ def main():
     collections_filter = set(args.collections.split(",")) if args.collections else None
 
     if args.source in ("gluonts", "both"):
-        scan_gluonts(out_path, seen_ids, collections_filter, args.limit, args.with_adf, args.workers)
+        scan_gluonts(out_path, seen_ids, collections_filter, args.limit, args.workers)
     if args.source in ("tslib", "both"):
-        scan_tslib(out_path, seen_ids, collections_filter, args.limit, args.with_adf, args.workers)
+        scan_tslib(out_path, seen_ids, collections_filter, args.limit, args.workers)
 
     if out_path.exists():
         print_summary(out_path)
