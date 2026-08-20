@@ -37,9 +37,16 @@ pip install git+https://github.com/jpmsilva1/imbalance-hub.git
 from imbalance_hub import load_catalog, pull
 
 catalog = load_catalog()
-severe_hourly = catalog[(catalog.imbalance_level == "severe") & (catalog.granularity == "H")]
+severe_hourly = catalog[(catalog.imbalance_level == "severe") & (catalog.granularity.isin(["H", "h", "1H"]))]
 
 series = pull(severe_hourly.id.iloc[0])   # -> pd.Series, values ready to use
+
+# Filter by collection + severity + length before pulling anything.
+candidates = catalog[
+    (catalog.collection == "m4_monthly")
+    & (catalog.imbalance_level.isin(["severe", "extreme"]))
+    & (catalog.length >= 200)
+]
 ```
 
 `load_catalog()` fetches the metadata CSV from GitHub (not from this repo) and caches it
@@ -62,6 +69,27 @@ The catalog id (`source:collection:key`, e.g. `gluonts:m4_hourly:h1`) is what ma
 its blob path — see `blob_path_for()` in
 [`scripts/upload_blobs.py`](https://github.com/jpmsilva1/imbalance-hub/blob/main/scripts/upload_blobs.py)
 in the GitHub repo, or just use the catalog CSV's `blob_path` column directly.
+
+## Filterable columns
+
+The columns you'll actually filter `load_catalog()`'s DataFrame on. Full column list/types
+and the complete numeric-distribution table live in the
+[GitHub README's Catalog schema section](https://github.com/jpmsilva1/imbalance-hub#catalog-schema).
+
+| Column | Values |
+|---|---|
+| `source` | `gluonts` (58,354), `tslib` (1,135) |
+| `imbalance_level` | `moderate` (32,867), `severe` (13,256), `mild` (12,194), `extreme` (1,172) |
+| `granularity` | 18 raw, **un-normalized** strings (`H`/`h`/`1H` are all "hourly", `30min`/`0.5h` are the same interval spelled two ways) — filter with `.isin([...])` across every spelling, e.g. `catalog.granularity.isin(["H", "h", "1H"])` |
+| `collection` | 55 distinct, from `m4_monthly` (16,998) down to single-series collections |
+
+Numeric ranges (min / median / max) for the columns most people filter on:
+
+| Column | Min | Median | Max |
+|---|---|---|---|
+| `length` | 12 | 330 | 526,980 |
+| `%Rare` | 0.01 | 8.70 | 100.00 |
+| `IR` | 0 | 10.50 | 8,766 |
 
 ## Dataset summary
 

@@ -1,0 +1,97 @@
+{
+  "collection_count_distinct": 55,
+  "collection_examples": {
+    "car_parts_without_missing": 2195,
+    "london_smart_meters_without_missing": 5556,
+    "m4_monthly": 16998,
+    "m4_quarterly": 6294,
+    "m4_yearly": 4406,
+    "weather": 2142,
+    "wiki-rolling_nips": 9359,
+    "wiki2000_nips": 1972
+  },
+  "dtype": {
+    "float64": 59484,
+    "int64": 5
+  },
+  "granularity": {
+    "0.5h": 5561,
+    "10min": 125,
+    "15min": 24,
+    "1B": 5,
+    "1H": 93,
+    "1h": 243,
+    "30min": 1181,
+    "B": 5,
+    "D": 15606,
+    "H": 1855,
+    "M": 20129,
+    "Q": 6529,
+    "W": 528,
+    "W-TUE": 7,
+    "Y": 4517,
+    "__null__": 20,
+    "h": 2860,
+    "min": 201
+  },
+  "imbalance_level": {
+    "extreme": 1172,
+    "mild": 12194,
+    "moderate": 32867,
+    "severe": 13256
+  },
+  "numeric": {
+    "%Rare": {
+      "25%": 5.08,
+      "50%": 8.7,
+      "75%": 13.54,
+      "max": 100.0,
+      "min": 0.01
+    },
+    "IR": {
+      "25%": 6.38,
+      "50%": 10.5,
+      "75%": 18.67,
+      "max": 8766.0,
+      "min": 0.0
+    },
+    "N": {
+      "25%": 72,
+      "50%": 320,
+      "75%": 812,
+      "max": 526970,
+      "min": 2
+    },
+    "length": {
+      "25%": 82,
+      "50%": 330,
+      "75%": 822,
+      "max": 526980,
+      "min": 12
+    },
+    "missing_pct": {
+      "25%": 0.0,
+      "50%": 0.0,
+      "75%": 0.0,
+      "max": 3.9456,
+      "min": 0.0
+    },
+    "seasonal_period": {
+      "25%": 7,
+      "50%": 12,
+      "75%": 12,
+      "max": 1440,
+      "min": 1,
+      "null_count": 20
+    }
+  },
+  "row_count": 59489,
+  "source": {
+    "gluonts": 58354,
+    "tslib": 1135
+  },
+  "time_column_by_source": {
+    "gluonts": null,
+    "tslib": "date"
+  }
+}

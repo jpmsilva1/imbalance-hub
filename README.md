@@ -11,7 +11,7 @@ Instead of hunting down datasets and hand-checking whether they're actually imba
 from imbalance_hub import load_catalog, pull
 
 catalog = load_catalog()
-severe_hourly = catalog[(catalog.imbalance_level == "severe") & (catalog.granularity == "H")]
+severe_hourly = catalog[(catalog.imbalance_level == "severe") & (catalog.granularity.isin(["H", "h", "1H"]))]
 
 series = pull(severe_hourly.id.iloc[0])   # -> pd.Series, values ready to use
 ```
@@ -60,7 +60,24 @@ print(candidates[["id", "collection", "N", "n_rare", "%Rare", "imbalance_level"]
 # Pull just the series you actually want.
 series = pull(candidates.id.iloc[0])          # -> pd.Series
 batch = pull_many(candidates.id.head(20))     # -> dict[id, pd.Series]
+
+# Long severe/extreme series from a specific collection.
+m4_candidates = catalog[
+    (catalog.collection == "m4_monthly")
+    & (catalog.imbalance_level.isin(["severe", "extreme"]))
+    & (catalog.length >= 200)
+]
+
+# Hourly-granularity series (accounting for the three raw spellings) with
+# no missing values and a strong rare regime.
+hourly_clean = catalog[
+    catalog.granularity.isin(["H", "h", "1H"])
+    & (catalog.missing_pct == 0)
+    & (catalog["%Rare"] < 5)
+]
 ```
+
+See [Filterable values](#filterable-values) below for the full domain of every column above.
 
 `load_catalog()` fetches `catalog/series.csv` once and caches it locally (`~/.cache/imbalance_hub/`), so filtering and re-filtering costs nothing after the first call. `pull()`/`pull_many()` only download the Parquet blob for the specific series you ask for — the catalog is metadata-only, so browsing 59k+ series doesn't mean downloading 59k+ series.
 
@@ -104,6 +121,74 @@ Scoring params are fixed to match the paper across the whole catalog: `rel_thres
 | **Imbalance** | `N`, `n_normal`, `n_rare`, `IR`, `%Rare`, `imbalance_level`, plus the exact scoring params used: `rel_thres`, `rel_coef`, `rel_xtrm_type`, `k`, `embed`, `diff` |
 | **Characteristics** | `missing_pct`, `mean`, `std`, `cv`, `skewness`, `kurtosis`, `autocorr_lag1`, `seasonal_period` (granularity-keyed lookup, e.g. `24` for hourly — not a fitted decomposition) |
 | **Provenance** | `content_hash` (`sha256(values)[:16]`, for integrity checks), `blob_path`, `hf_revision`, `pipeline_version`, `ingested_at` |
+
+### Filterable values
+
+What you can actually pass to `.isin([...])` / comparisons in the Quick start example above, straight from `catalog/series.csv` as of the current catalog (59,489 rows). Kept in sync with the real data by `scripts/check_catalog_docs.py`, enforced in CI.
+
+**`source`**
+
+| Value | Count |
+|---|---|
+| `gluonts` | 58,354 |
+| `tslib` | 1,135 |
+
+**`imbalance_level`** — see the severity table in [How it works](#how-it-works) for how this is derived from `%Rare`.
+
+| Value | Count |
+|---|---|
+| `moderate` | 32,867 |
+| `severe` | 13,256 |
+| `mild` | 12,194 |
+| `extreme` | 1,172 |
+
+**`dtype`**: `float64` (59,484), `int64` (5)
+
+**`time_column`**: `NaN` for every `gluonts` row, `"date"` for every `tslib` row — effectively a `source`-keyed flag, not an independent axis to filter on.
+
+**`granularity`** — **raw strings from each source's native frequency notation, not normalized.** `H`, `h`, and `1H` all mean "hourly" but are three different strings; same for `30min`/`0.5h`. Filter with `.isin([...])` across every spelling you care about, e.g. `catalog.granularity.isin(["H", "h", "1H"])` for hourly. This is deliberate — normalizing it is a separate data-quality task, not part of this catalog's current guarantees.
+
+| Value | Count | | Value | Count |
+|---|---|---|---|---|
+| `M` | 20,129 | | `W` | 528 |
+| `D` | 15,606 | | `1h` | 243 |
+| `Q` | 6,529 | | `min` | 201 |
+| `0.5h` | 5,561 | | `10min` | 125 |
+| `Y` | 4,517 | | `1H` | 93 |
+| `h` | 2,860 | | `15min` | 24 |
+| `H` | 1,855 | | *(missing)* | 20 |
+| `30min` | 1,181 | | `W-TUE` | 7 |
+| | | | `1B` / `B` | 5 each |
+
+**`collection`** — 55 distinct values. The largest:
+
+| Value | Count |
+|---|---|
+| `m4_monthly` | 16,998 |
+| `wiki-rolling_nips` | 9,359 |
+| `m4_quarterly` | 6,294 |
+| `london_smart_meters_without_missing` | 5,556 |
+| `m4_yearly` | 4,406 |
+| `car_parts_without_missing` | 2,195 |
+| `weather` | 2,142 |
+| `wiki2000_nips` | 1,972 |
+
+...down to single-series collections like `sunspot_without_missing`. Run `catalog.collection.value_counts()` for the full list of 55.
+
+**Numeric columns** (min / 25% / median / 75% / max):
+
+| Column | Min | 25% | Median | 75% | Max |
+|---|---|---|---|---|---|
+| `N` | 2 | 72 | 320 | 812 | 526,970 |
+| `length` | 12 | 82 | 330 | 822 | 526,980 |
+| `IR` | 0 | 6.38 | 10.50 | 18.67 | 8,766 |
+| `%Rare` | 0.01 | 5.08 | 8.70 | 13.54 | 100.00 |
+| `missing_pct` | 0 | 0 | 0 | 0 | 3.95 |
+| `seasonal_period` | 1 | 7 | 12 | 12 | 1,440 (20 null) |
+
+`missing_pct` is a 0–100 percentage (percent of raw values that are `NaN`), not a 0–1 fraction — most series have none, hence the flat 0s through the 75th percentile.
+
+`mean`, `std`, `cv`, `skewness`, `kurtosis`, `autocorr_lag1` are also present but heavy-tailed and not usefully summarized as a single range here — inspect them directly, e.g. `catalog["kurtosis"].describe()`.
 
 `catalog/scanned.csv` holds every series ever scanned — accepted or not — with a `verdict` column (`accepted`/`rejected`). It's the audit trail proving *why* a series is absent from the catalog, and it doubles as the incremental-scan cache for future runs.
 
