@@ -8,8 +8,9 @@ which this module inherits by importing from it."""
 import argparse
 import hashlib
 import re
+import tomllib
 from datetime import datetime, timezone
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import pandas as pd
@@ -65,6 +66,18 @@ def finalize_catalog(series_df: pd.DataFrame, blob_sizes: dict, revision: str,
     result.loc[uploaded, "pipeline_version"] = pipeline_version
     result.loc[uploaded, "ingested_at"] = ingested_at
     return result
+
+
+def pipeline_version() -> str:
+    """Installed package version, falling back to pyproject.toml's [project]
+    version -- upload_blobs.py is routinely run via `python -m` against an
+    uninstalled checkout, where importlib.metadata has no record at all."""
+    try:
+        return version("imbalance-hub")
+    except PackageNotFoundError:
+        pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+        with open(pyproject, "rb") as f:
+            return tomllib.load(f)["project"]["version"]
 
 
 def _stage_collection(stage_dir, source, collection, wanted_hashes):
@@ -134,7 +147,7 @@ def main():
 
     updated = finalize_catalog(
         series_df, blob_sizes, revision=revision,
-        pipeline_version=version("imbalance-hub"),
+        pipeline_version=pipeline_version(),
         ingested_at=datetime.now(timezone.utc).isoformat(),
     )
     updated.to_csv(args.catalog, index=False)
