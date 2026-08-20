@@ -50,6 +50,25 @@ def test_pull_returns_datetime_indexed_series_when_blob_has_timestamps(tmp_path)
     assert result.tolist() == values
 
 
+def test_pull_rejects_traversal_shaped_blob_path():
+    # blob_path/hf_revision come from the remote catalog CSV -- a compromised
+    # or malicious catalog shouldn't be able to make hf_hub_download read
+    # outside the intended cache directory.
+    catalog = pd.DataFrame([{"id": "gluonts:m4_hourly:h1", "blob_path": "../../etc/passwd",
+                              "hf_revision": "main", "content_hash": "deadbeef"}])
+
+    with pytest.raises(ValueError, match="blob_path"):
+        pull("gluonts:m4_hourly:h1", catalog=catalog, download_fn=lambda *a, **k: None)
+
+
+def test_pull_rejects_absolute_blob_path():
+    catalog = pd.DataFrame([{"id": "gluonts:m4_hourly:h1", "blob_path": "/etc/passwd",
+                              "hf_revision": "main", "content_hash": "deadbeef"}])
+
+    with pytest.raises(ValueError, match="blob_path"):
+        pull("gluonts:m4_hourly:h1", catalog=catalog, download_fn=lambda *a, **k: None)
+
+
 def test_pull_raises_when_id_not_in_catalog():
     catalog = pd.DataFrame([{"id": "known:id:1", "blob_path": "x.parquet",
                               "hf_revision": "main", "content_hash": "deadbeef"}])

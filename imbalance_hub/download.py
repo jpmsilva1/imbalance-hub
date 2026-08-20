@@ -1,5 +1,6 @@
 """Pull one or more accepted series from the HF blob mirror by catalog id."""
 import hashlib
+import posixpath
 
 import numpy as np
 import pandas as pd
@@ -12,6 +13,16 @@ HF_REPO = "jpms5/imbalance-hub"
 def _content_hash(values):
     arr = np.asarray(values, dtype=float)
     return hashlib.sha256(arr.tobytes()).hexdigest()[:16]
+
+
+def _check_safe_blob_path(blob_path):
+    # blob_path comes from the remote catalog CSV, not something we
+    # generate locally -- reject anything that isn't a plain relative path
+    # before it reaches hf_hub_download, in case the catalog is ever served
+    # tampered content.
+    normalized = posixpath.normpath(blob_path)
+    if blob_path.startswith("/") or normalized == ".." or normalized.startswith("../"):
+        raise ValueError(f"unsafe blob_path in catalog: {blob_path!r}")
 
 
 def _default_download(blob_path, revision):
@@ -30,6 +41,7 @@ def pull(id_: str, catalog: pd.DataFrame | None = None, download_fn=None) -> pd.
 
     if pd.isna(row["blob_path"]):
         raise ValueError(f"no blob uploaded yet for id: {id_}")
+    _check_safe_blob_path(row["blob_path"])
 
     fetch = download_fn or _default_download
     local_path = fetch(row["blob_path"], row["hf_revision"])
