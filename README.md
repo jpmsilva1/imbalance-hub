@@ -1,5 +1,8 @@
 # imbalance-hub
 
+[![License: MIT](https://img.shields.io/github/license/jpmsilva1/imbalance-hub)](LICENSE)
+[![Ingest](https://github.com/jpmsilva1/imbalance-hub/actions/workflows/ingest.yml/badge.svg)](https://github.com/jpmsilva1/imbalance-hub/actions/workflows/ingest.yml)
+
 A curated, versioned catalog of **imbalanced time series** — "OpenML for imbalanced time series." Every series in it has been scored with [`imbalance_eval`](https://github.com/jpmsilva1/imbalance_eval) (the relevance-function methodology from Moniz, Branco & Torgo 2017) and kept only if it actually has a rare regime worth studying.
 
 Instead of hunting down datasets and hand-checking whether they're actually imbalanced, browse the catalog's metadata, filter with pandas, and pull only the series you want:
