@@ -47,7 +47,10 @@ def pull(id_: str, catalog: pd.DataFrame | None = None, download_fn=None) -> pd.
     local_path = fetch(row["blob_path"], row["hf_revision"])
     df = pd.read_parquet(local_path)
 
-    if _content_hash(df["value"]) != row["content_hash"]:
+    # ponytail: hash covers non-null values only, matching scan.py's dropna-based
+    # hash. NaN positions are therefore unverified; length/missing_pct in the
+    # catalog cover them loosely. Upgrade = re-scan with a NaN-inclusive hash.
+    if _content_hash(df["value"].dropna()) != row["content_hash"]:
         raise ValueError(f"content_hash mismatch for id: {id_} -- blob does not match catalog")
 
     if "timestamp" in df.columns:
