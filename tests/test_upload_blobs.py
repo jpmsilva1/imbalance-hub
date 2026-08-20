@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 from scripts.scan import content_hash
-from scripts.upload_blobs import blob_path_for, finalize_catalog, series_to_frame, stage_series
+from scripts.upload_blobs import blob_path_for, finalize_catalog, pipeline_version, series_to_frame, stage_series
 
 
 def test_blob_path_for_plain_id():
@@ -25,6 +25,14 @@ def test_blob_path_for_shards_large_collections_under_10000_files_per_dir():
     from collections import Counter
     shards = Counter(blob_path_for(f"gluonts:m4_monthly:t{i}").rsplit("/", 2)[1] for i in range(20000))
     assert max(shards.values()) < 10000
+
+
+def test_pipeline_version_falls_back_to_pyproject_when_uninstalled():
+    # upload_blobs.py is routinely run via `python -m` against an uninstalled
+    # checkout (no `pip install -e .`), where importlib.metadata has no
+    # record and raises PackageNotFoundError -- this is that exact case in
+    # this test environment too, so it exercises the real fallback path.
+    assert pipeline_version() == "0.1.0"
 
 
 def test_series_to_frame_without_datetime_index_has_only_value_column():
