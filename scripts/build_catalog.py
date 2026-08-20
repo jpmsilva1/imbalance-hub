@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+"""Turns a raw scan_results.csv (from scan.py) into the two catalog CSVs
+defined by the design plan's "Catalog schema": catalog/series.csv (accepted
+series only, full schema) and catalog/scanned.csv (every scanned series,
+audit trail).
+"""
+import argparse
+from pathlib import Path
+
+import pandas as pd
+
+# Fixed to match Moniz, Branco & Torgo 2017 -- same constants as scan.py.
+REL_THRES = 0.9
+REL_COEF = 1.5
+REL_XTRM_TYPE = "both"
+K = 10
+EMBED = True
+DIFF = False
+
+# ponytail: coarse granularity -> period lookup, not a fitted seasonal
+# decomposition (matches the plan's explicit "24/hourly, 7/daily, 12/monthly"
+# example). Covers every granularity string observed in scan_results.csv;
+# extend when a new one shows up rather than trying to parse freq strings.
+SEASONAL_PERIOD = {
+    "H": 24, "1H": 24, "h": 24, "1h": 24,
+    "D": 7, "B": 5, "1B": 5,
+    "W": 52, "W-TUE": 52,
+    "M": 12, "1M": 12,
+    "Q": 4,
+    "Y": 1,
+    "min": 1440, "10min": 144, "15min": 96, "30min": 48, "0.5h": 48,
+}
+
+SERIES_COLUMNS = [
+    "id", "name", "source", "collection",
+    "granularity", "time_column", "length", "dtype", "size_bytes",
+    "N", "n_normal", "n_rare", "IR", "%Rare", "imbalance_level",
+    "rel_thres", "rel_coef", "rel_xtrm_type", "k", "embed", "diff",
+    "missing_pct", "mean", "std", "cv", "skewness", "kurtosis",
+    "autocorr_lag1", "adf_pvalue", "is_stationary", "seasonal_period",
+    "content_hash", "blob_path", "hf_revision", "pipeline_version", "ingested_at",
+]
+
+SCANNED_COLUMNS = ["id", "content_hash", "N", "n_rare", "%Rare", "IR", "imbalance_level", "verdict"]
+
+
+def build_catalog(scan_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Split a scan_results.csv-shaped DataFrame into (series_df, scanned_df).
+
+    series_df: accepted series only (status=="ok" and n_rare>0), full catalog
+    schema, sorted by id. blob_path/hf_revision/pipeline_version/ingested_at
+    are left blank -- those are filled by the future HF blob-upload step, not
+    known at scan time.
+    scanned_df: every row, with a derived "accepted"/"rejected" verdict --
+    the full audit trail, including skipped/error rows.
+    """
+    accepted_mask = (scan_df["status"] == "ok") & (scan_df["n_rare"] > 0)
+
+    series_df = scan_df[accepted_mask].copy()
+    series_df["size_bytes"] = pd.NA
+    series_df["rel_thres"] = REL_THRES
+    series_df["rel_coef"] = REL_COEF
+    series_df["rel_xtrm_type"] = REL_XTRM_TYPE
+    series_df["k"] = K
+    series_df["embed"] = EMBED
+    series_df["diff"] = DIFF
+    series_df["seasonal_period"] = series_df["granularity"].map(SEASONAL_PERIOD)
+    for col in ("blob_path", "hf_revision", "pipeline_version", "ingested_at"):
+        series_df[col] = pd.NA
+    series_df = series_df[SERIES_COLUMNS].sort_values("id").reset_index(drop=True)
+
+    scanned_df = scan_df.copy()
+    scanned_df["verdict"] = "rejected"
+    scanned_df.loc[accepted_mask, "verdict"] = "accepted"
+    scanned_df = scanned_df[SCANNED_COLUMNS].sort_values("id").reset_index(drop=True)
+
+    return series_df, scanned_df
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--scan", default="scan_results.csv")
+    parser.add_argument("--out-dir", default="catalog")
+    args = parser.parse_args()
+
+    scan_df = pd.read_csv(args.scan, low_memory=False).drop_duplicates(subset="id")
+    series_df, scanned_df = build_catalog(scan_df)
+
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(exist_ok=True)
+    series_df.to_csv(out_dir / "series.csv", index=False)
+    scanned_df.to_csv(out_dir / "scanned.csv", index=False)
+    print(f"series.csv: {len(series_df)} accepted series")
+    print(f"scanned.csv: {len(scanned_df)} total scanned")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,30 @@
+name: Ingest
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - name: Scan sources
+        run: python scripts/scan.py --out scan_results.csv --resume
+
+      - name: Build catalog CSVs
+        run: python scripts/build_catalog.py --scan scan_results.csv --out-dir catalog
+
+      - name: Open PR with catalog diff
+        uses: peter-evans/create-pull-request@v6
+        with:
+          add-paths: catalog/series.csv,catalog/scanned.csv
+          commit-message: "Update catalog from scheduled ingest"
+          title: "Ingest: update catalog"
+          branch: ingest-update

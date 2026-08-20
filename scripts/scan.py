@@ -9,13 +9,24 @@ unattended for a long time (~150k series) -- see README.md for usage.
 import argparse
 import csv
 import hashlib
+import os
+import socket
 import sys
 import time
 import warnings
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+# Global socket timeout so a stalled TCP handshake (observed hanging
+# indefinitely on a GluonTS download) fails into the existing error_row path
+# instead of blocking the whole scan forever. Covers urllib/requests-based
+# downloads (gluonts, huggingface_hub) since they fall back to this when no
+# per-call timeout is given.
+SOCKET_TIMEOUT_S = 60
+socket.setdefaulttimeout(SOCKET_TIMEOUT_S)
 
 try:
     import imbalance_eval as ie
@@ -144,6 +155,23 @@ def build_row(id_, source, collection, name, granularity, time_column, series, w
     return base
 
 
+def _build_row_star(args):
+    return build_row(*args)
+
+
+def _score_tasks(tasks, workers):
+    """Run build_row over a list of build_row-argument tuples, spread across
+    worker processes -- each series is scored independently, so this is
+    embarrassingly parallel and (with --with-adf) CPU-bound enough to be
+    worth it. Falls back to sequential for workers<=1."""
+    if not tasks:
+        return []
+    if workers <= 1:
+        return [build_row(*t) for t in tasks]
+    with ProcessPoolExecutor(max_workers=workers) as ex:
+        return list(ex.map(_build_row_star, tasks))
+
+
 def write_rows(out_path, rows):
     if not rows:
         return
@@ -162,7 +190,15 @@ def existing_ids(out_path):
     return set(pd.read_csv(out_path, usecols=["id"])["id"])
 
 
-def scan_gluonts(out_path, seen_ids, collections_filter, limit, with_adf):
+def error_row(source, collection, note):
+    """One blank CSV row recording a whole collection that failed to download."""
+    return {c: "" for c in CSV_COLUMNS} | {
+        "id": make_id(source, collection, "dataset"), "source": source, "collection": collection,
+        "status": "error", "note": note[:200],
+    }
+
+
+def scan_gluonts(out_path, seen_ids, collections_filter, limit, with_adf, workers):
     try:
         from gluonts.dataset.repository.datasets import get_dataset, dataset_names
     except ImportError:
@@ -173,35 +209,42 @@ def scan_gluonts(out_path, seen_ids, collections_filter, limit, with_adf):
         names = [n for n in names if n in collections_filter]
 
     for name in names:
+        err_id = make_id("gluonts", name, "dataset")
+        if err_id in seen_ids:
+            continue
         t0 = time.time()
         try:
             ds = get_dataset(name)
         except Exception as e:
-            write_rows(out_path, [{c: "" for c in CSV_COLUMNS} | {
-                "id": make_id("gluonts", name, "dataset"), "source": "gluonts", "collection": name,
-                "status": "error", "note": f"download failed: {e}"[:200],
-            }])
+            write_rows(out_path, [error_row("gluonts", name, f"download failed: {e}")])
+            seen_ids.add(err_id)
             print(f"gluonts:{name} FAILED to download ({time.time() - t0:.1f}s): {e}")
             continue
 
         freq = getattr(ds.metadata, "freq", "")
-        rows = []
+        tasks = []
         n_seen = 0
         for entry in ds.train:
-            # `or n_seen` matters: some datasets set item_id to None explicitly,
-            # and dict.get returns that None instead of the default -- every such
-            # series would then collide on the same id.
-            key = entry.get("item_id") or n_seen
-            id_ = make_id("gluonts", name, key)
+            # `is None` matters, not `or`: item_id can legitimately be 0, which
+            # `or` would treat as falsy and overwrite with the counter. Some
+            # datasets also set item_id to None explicitly, hence the check.
+            key = entry.get("item_id")
+            if key is None:
+                key = n_seen
             n_seen += 1
+            id_ = make_id("gluonts", name, key)
             if id_ in seen_ids:
                 continue
-            if limit and n_seen > limit:
+            # Bound on NEW rows added this run, not on entries examined -- so
+            # --resume with the same --limit keeps making progress instead of
+            # immediately exhausting the budget on already-scanned entries.
+            if limit and len(tasks) >= limit:
                 break
             series = pd.Series(np.asarray(entry["target"], dtype=float))
-            rows.append(build_row(id_, "gluonts", name, str(key), freq, "", series, with_adf))
+            tasks.append((id_, "gluonts", name, str(key), freq, "", series, with_adf))
             seen_ids.add(id_)
 
+        rows = _score_tasks(tasks, workers)
         write_rows(out_path, rows)
         print(f"gluonts:{name} {len(rows)} series in {time.time() - t0:.1f}s")
 
@@ -221,7 +264,7 @@ def read_tslib_csv(repo_path):
         return pd.read_csv(f"https://huggingface.co/datasets/{TSLIB_REPO}/resolve/main/{repo_path}")
 
 
-def scan_tslib(out_path, seen_ids, collections_filter, limit, with_adf):
+def scan_tslib(out_path, seen_ids, collections_filter, limit, with_adf, workers):
     from huggingface_hub import HfApi
 
     api = HfApi()
@@ -240,14 +283,15 @@ def scan_tslib(out_path, seen_ids, collections_filter, limit, with_adf):
         by_collection.setdefault(collection, f)  # one csv per collection expected
 
     for collection, repo_path in by_collection.items():
+        err_id = make_id("tslib", collection, "dataset")
+        if err_id in seen_ids:
+            continue
         t0 = time.time()
         try:
             df = read_tslib_csv(repo_path)
         except Exception as e:
-            write_rows(out_path, [{c: "" for c in CSV_COLUMNS} | {
-                "id": make_id("tslib", collection, "dataset"), "source": "tslib", "collection": collection,
-                "status": "error", "note": f"download/read failed: {e}"[:200],
-            }])
+            write_rows(out_path, [error_row("tslib", collection, f"download/read failed: {e}")])
+            seen_ids.add(err_id)
             print(f"tslib:{collection} FAILED to download ({time.time() - t0:.1f}s): {e}")
             continue
 
@@ -267,17 +311,21 @@ def scan_tslib(out_path, seen_ids, collections_filter, limit, with_adf):
             df = df.drop(columns=[date_col])
 
         numeric_cols = list(df.select_dtypes(include="number").columns)
-        if limit:
-            numeric_cols = numeric_cols[:limit]
 
-        rows = []
+        tasks = []
         for col in numeric_cols:
             id_ = make_id("tslib", collection, col)
             if id_ in seen_ids:
                 continue
-            rows.append(build_row(id_, "tslib", collection, col, granularity, date_col or "", df[col], with_adf))
+            # Bound on NEW rows added this run, not on column position -- so
+            # --resume with the same --limit keeps making progress instead of
+            # re-slicing the same already-scanned leading columns.
+            if limit and len(tasks) >= limit:
+                break
+            tasks.append((id_, "tslib", collection, col, granularity, date_col or "", df[col], with_adf))
             seen_ids.add(id_)
 
+        rows = _score_tasks(tasks, workers)
         write_rows(out_path, rows)
         print(f"tslib:{collection} {len(rows)} series in {time.time() - t0:.1f}s")
 
@@ -302,6 +350,8 @@ def main():
     parser.add_argument("--limit", type=int, default=0, help="max series per collection, 0=all")
     parser.add_argument("--with-adf", action="store_true", help="also run ADF stationarity test (~3x slower)")
     parser.add_argument("--resume", action="store_true", help="skip ids already present in --out")
+    parser.add_argument("--workers", type=int, default=os.cpu_count() or 1,
+                         help="parallel worker processes for scoring (default: all cores)")
     args = parser.parse_args()
 
     out_path = Path(args.out)
@@ -316,9 +366,9 @@ def main():
     collections_filter = set(args.collections.split(",")) if args.collections else None
 
     if args.source in ("gluonts", "both"):
-        scan_gluonts(out_path, seen_ids, collections_filter, args.limit, args.with_adf)
+        scan_gluonts(out_path, seen_ids, collections_filter, args.limit, args.with_adf, args.workers)
     if args.source in ("tslib", "both"):
-        scan_tslib(out_path, seen_ids, collections_filter, args.limit, args.with_adf)
+        scan_tslib(out_path, seen_ids, collections_filter, args.limit, args.with_adf, args.workers)
 
     if out_path.exists():
         print_summary(out_path)

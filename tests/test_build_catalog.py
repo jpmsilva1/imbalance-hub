@@ -1,0 +1,93 @@
+import pandas as pd
+
+from scripts.build_catalog import build_catalog
+
+
+def _scan_row(**overrides):
+    """One scan_results.csv row with realistic ok/accepted defaults."""
+    row = {
+        "id": "gluonts:m4_hourly:h1", "source": "gluonts", "collection": "m4_hourly",
+        "name": "h1", "granularity": "H", "time_column": "", "length": 500,
+        "dtype": "float64", "content_hash": "abc123",
+        "N": 490, "n_normal": 470, "n_rare": 20, "IR": 23.5, "%Rare": 4.08,
+        "imbalance_level": "severe",
+        "missing_pct": 0.0, "mean": 100.0, "std": 10.0, "cv": 0.1,
+        "skewness": 0.5, "kurtosis": 1.2, "autocorr_lag1": 0.8,
+        "adf_pvalue": "", "is_stationary": "",
+        "status": "ok", "note": "",
+    }
+    row.update(overrides)
+    return row
+
+
+def test_accepted_series_lands_in_series_csv_with_full_catalog_schema():
+    scan_df = pd.DataFrame([_scan_row()])
+
+    series_df, scanned_df = build_catalog(scan_df)
+
+    assert len(series_df) == 1
+    row = series_df.iloc[0]
+    assert row["id"] == "gluonts:m4_hourly:h1"
+    assert row["source"] == "gluonts"
+    assert row["collection"] == "m4_hourly"
+    assert row["N"] == 490
+    assert row["n_rare"] == 20
+    assert row["imbalance_level"] == "severe"
+    # Fixed scoring params, recorded per row per the catalog schema.
+    assert row["rel_thres"] == 0.9
+    assert row["rel_coef"] == 1.5
+    assert row["rel_xtrm_type"] == "both"
+    assert row["k"] == 10
+    assert row["embed"] == True
+    assert row["diff"] == False
+    # Granularity-keyed lookup, not a fitted decomposition.
+    assert row["seasonal_period"] == 24
+    assert row["content_hash"] == "abc123"
+
+    assert len(scanned_df) == 1
+    assert scanned_df.iloc[0]["verdict"] == "accepted"
+
+
+def test_series_with_no_rare_regime_is_excluded_from_series_csv_but_audited():
+    scan_df = pd.DataFrame([_scan_row(
+        id="gluonts:m4_hourly:h2", n_rare=0, n_normal=490, IR=float("inf"), **{"%Rare": 0.0},
+        imbalance_level="none",
+    )])
+
+    series_df, scanned_df = build_catalog(scan_df)
+
+    assert len(series_df) == 0
+    assert len(scanned_df) == 1
+    assert scanned_df.iloc[0]["verdict"] == "rejected"
+    assert scanned_df.iloc[0]["id"] == "gluonts:m4_hourly:h2"
+
+
+def test_skipped_and_error_rows_are_audited_but_excluded_from_series_csv():
+    # None/NaN, not "" -- matches what pd.read_csv actually produces for a
+    # blank cell in a numeric column (a real scan_results.csv row for a
+    # skipped/error series has empty N/n_rare/etc fields).
+    blank = dict(N=None, n_normal=None, n_rare=None, IR=None, imbalance_level=None)
+    scan_df = pd.DataFrame([
+        _scan_row(id="gluonts:m1_yearly:9", status="skipped_short", **blank, **{"%Rare": None}),
+        _scan_row(id="gluonts:m3_monthly:dataset", status="error", **blank, **{"%Rare": None}),
+    ])
+
+    series_df, scanned_df = build_catalog(scan_df)
+
+    assert len(series_df) == 0
+    assert len(scanned_df) == 2
+    assert set(scanned_df["verdict"]) == {"rejected"}
+
+
+def test_series_csv_is_sorted_by_id():
+    scan_df = pd.DataFrame([
+        _scan_row(id="gluonts:z_collection:9"),
+        _scan_row(id="gluonts:a_collection:1"),
+        _scan_row(id="gluonts:m_collection:5"),
+    ])
+
+    series_df, _ = build_catalog(scan_df)
+
+    assert series_df["id"].tolist() == [
+        "gluonts:a_collection:1", "gluonts:m_collection:5", "gluonts:z_collection:9",
+    ]
