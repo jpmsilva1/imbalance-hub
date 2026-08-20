@@ -6,6 +6,7 @@ ingested_at back into catalog/series.csv.
 Requires imbalance_eval on the path -- see scripts/scan.py's import fallback,
 which this module inherits by importing from it."""
 import argparse
+import hashlib
 import re
 from datetime import datetime, timezone
 from importlib.metadata import version
@@ -19,9 +20,15 @@ from scripts.scan import content_hash, iter_gluonts_series, iter_tslib_series, l
 
 def blob_path_for(id_: str) -> str:
     """catalog id -> repo-relative parquet path. Sanitizes the key so ids
-    containing '/' (tslib:weather:wv-(m/s)) don't become nested directories."""
+    containing '/' (tslib:weather:wv-(m/s)) don't become nested directories,
+    and shards into a 2-hex-char subdirectory -- git/HF repos reject a
+    directory with more than 10,000 files, and gluonts:m4_monthly alone has
+    16,998 series. 256-way sharding keeps every directory under ~70 files at
+    today's scale with headroom for collections several times larger."""
     source, collection, key = id_.split(":", 2)
-    return f"{source}/{collection}/{re.sub(r'[^a-z0-9._-]', '-', key)}.parquet"
+    shard = hashlib.md5(id_.encode()).hexdigest()[:2]
+    safe_key = re.sub(r'[^a-z0-9._-]', '-', key)
+    return f"{source}/{collection}/{shard}/{safe_key}.parquet"
 
 
 def series_to_frame(series: pd.Series) -> pd.DataFrame:
