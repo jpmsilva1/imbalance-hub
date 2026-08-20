@@ -7,7 +7,7 @@ from scripts.upload_blobs import blob_path_for, finalize_catalog, series_to_fram
 
 
 def test_blob_path_for_plain_id():
-    assert blob_path_for("gluonts:m4_hourly:h1") == "gluonts/m4_hourly/h1.parquet"
+    assert blob_path_for("gluonts:m4_hourly:h1") == "gluonts/m4_hourly/ce/h1.parquet"
 
 
 def test_blob_path_for_does_not_nest_on_slash_in_key():
@@ -15,8 +15,16 @@ def test_blob_path_for_does_not_nest_on_slash_in_key():
     # nested directory in the blob path.
     path = blob_path_for("tslib:weather:wv-(m/s)")
 
-    assert path == "tslib/weather/wv--m-s-.parquet"
+    assert path == "tslib/weather/68/wv--m-s-.parquet"
     assert ".." not in path and not path.startswith("/")
+
+
+def test_blob_path_for_shards_large_collections_under_10000_files_per_dir():
+    # HF/git rejects a directory with >10,000 files; gluonts:m4_monthly alone
+    # has 16,998 series, so every collection is sharded into 256 subdirs.
+    from collections import Counter
+    shards = Counter(blob_path_for(f"gluonts:m4_monthly:t{i}").rsplit("/", 2)[1] for i in range(20000))
+    assert max(shards.values()) < 10000
 
 
 def test_series_to_frame_without_datetime_index_has_only_value_column():
@@ -44,7 +52,7 @@ def test_stage_series_rejects_hash_mismatch(tmp_path):
     with pytest.raises(ValueError, match="content_hash"):
         stage_series(tmp_path, "gluonts:m4_hourly:h1", series, expected_hash="wronghash0000000")
 
-    assert not (tmp_path / "gluonts" / "m4_hourly" / "h1.parquet").exists()
+    assert not (tmp_path / "gluonts" / "m4_hourly" / "ce" / "h1.parquet").exists()
 
 
 def test_stage_series_writes_parquet_matching_series_to_frame(tmp_path):
@@ -53,7 +61,7 @@ def test_stage_series_writes_parquet_matching_series_to_frame(tmp_path):
 
     path = stage_series(tmp_path, "gluonts:m4_hourly:h1", series, expected_hash=expected_hash)
 
-    assert path == tmp_path / "gluonts" / "m4_hourly" / "h1.parquet"
+    assert path == tmp_path / "gluonts" / "m4_hourly" / "ce" / "h1.parquet"
     assert pd.read_parquet(path)["value"].tolist() == [1.0, 2.0, 3.0]
 
 
@@ -81,7 +89,7 @@ def test_finalize_catalog_fills_only_uploaded_rows():
                                pipeline_version="0.1.0", ingested_at="2026-08-20")
 
     uploaded = result.loc[result["id"] == "gluonts:m4_hourly:h1"].iloc[0]
-    assert uploaded["blob_path"] == "gluonts/m4_hourly/h1.parquet"
+    assert uploaded["blob_path"] == "gluonts/m4_hourly/ce/h1.parquet"
     assert uploaded["size_bytes"] == 1234
     assert uploaded["hf_revision"] == "abc123"
     assert uploaded["pipeline_version"] == "0.1.0"
