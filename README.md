@@ -115,6 +115,14 @@ The pipeline behind `catalog/series.csv` — useful if you want to reproduce it,
 pip install -r requirements.txt
 ```
 
+[`imbalance_eval`](https://github.com/jpmsilva1/imbalance_eval) isn't on PyPI yet, so it's
+not in `requirements.txt`. Either `pip install` it from a local checkout, or point
+`scripts/scan.py` at one directly:
+
+```bash
+export IMBALANCE_EVAL_PATH=~/imbalance_eval
+```
+
 **1. Scan** — pull every candidate series from GluonTS and TSLib, score each one, write a full audit row (including rejects/failures) to a flat CSV:
 
 ```bash

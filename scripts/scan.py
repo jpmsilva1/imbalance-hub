@@ -31,7 +31,16 @@ socket.setdefaulttimeout(SOCKET_TIMEOUT_S)
 try:
     import imbalance_eval as ie
 except ImportError:
-    sys.path.insert(0, "/Users/joaopms/Documents/imbalance_eval")
+    # Not on PyPI yet, so not in requirements.txt. Point IMBALANCE_EVAL_PATH
+    # at a local checkout (e.g. `export IMBALANCE_EVAL_PATH=~/imbalance_eval`)
+    # rather than pip-installing it, until it's published.
+    _fallback = os.environ.get("IMBALANCE_EVAL_PATH")
+    if not _fallback:
+        raise ImportError(
+            "imbalance_eval not found. Install it, or set IMBALANCE_EVAL_PATH "
+            "to a local checkout, e.g. export IMBALANCE_EVAL_PATH=~/imbalance_eval"
+        ) from None
+    sys.path.insert(0, os.path.expanduser(_fallback))
     import imbalance_eval as ie
 
 CSV_COLUMNS = [
