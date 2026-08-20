@@ -1,6 +1,17 @@
 import pandas as pd
 
-from imbalance_hub.catalog import load_catalog
+from imbalance_hub.catalog import _ref_for, load_catalog
+
+
+def test_ref_for_latest_resolves_to_main_branch():
+    # No git tags exist on the repo, so "latest" (the default version) has no
+    # matching ref of its own -- it must resolve to main, not be used
+    # literally as a ref, or every un-cached fetch 404s.
+    assert _ref_for("latest") == "main"
+
+
+def test_ref_for_pinned_version_passes_through_unchanged():
+    assert _ref_for("v1.0.0") == "v1.0.0"
 
 
 def test_load_catalog_fetches_from_source_and_caches(tmp_path):
