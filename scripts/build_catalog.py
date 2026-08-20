@@ -5,6 +5,7 @@ series only, full schema) and catalog/scanned.csv (every scanned series,
 audit trail).
 """
 import argparse
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -37,7 +38,7 @@ SERIES_COLUMNS = [
     "N", "n_normal", "n_rare", "IR", "%Rare", "imbalance_level",
     "rel_thres", "rel_coef", "rel_xtrm_type", "k", "embed", "diff",
     "missing_pct", "mean", "std", "cv", "skewness", "kurtosis",
-    "autocorr_lag1", "adf_pvalue", "is_stationary", "seasonal_period",
+    "autocorr_lag1", "seasonal_period",
     "content_hash", "blob_path", "hf_revision", "pipeline_version", "ingested_at",
 ]
 
@@ -83,7 +84,13 @@ def main():
     parser.add_argument("--out-dir", default="catalog")
     args = parser.parse_args()
 
-    scan_df = pd.read_csv(args.scan, low_memory=False).drop_duplicates(subset="id")
+    scan_df = pd.read_csv(args.scan, low_memory=False)
+    deduped = scan_df.drop_duplicates(subset="id")
+    n_dropped = len(scan_df) - len(deduped)
+    if n_dropped:
+        dupes = scan_df.loc[scan_df["id"].duplicated(keep=False), "id"].unique()
+        print(f"warning: dropped {n_dropped} duplicate-id rows, ids: {list(dupes)}", file=sys.stderr)
+    scan_df = deduped
     series_df, scanned_df = build_catalog(scan_df)
 
     out_dir = Path(args.out_dir)

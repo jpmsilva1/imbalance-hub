@@ -13,7 +13,6 @@ def _scan_row(**overrides):
         "imbalance_level": "severe",
         "missing_pct": 0.0, "mean": 100.0, "std": 10.0, "cv": 0.1,
         "skewness": 0.5, "kurtosis": 1.2, "autocorr_lag1": 0.8,
-        "adf_pvalue": "", "is_stationary": "",
         "status": "ok", "note": "",
     }
     row.update(overrides)

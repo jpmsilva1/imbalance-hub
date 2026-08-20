@@ -90,7 +90,7 @@ Scoring params are fixed to match the paper across the whole catalog: `rel_thres
 | **Identity** | `id` (`source:collection:key`, e.g. `gluonts:m4_hourly:h1`), `name`, `source` (`gluonts`/`tslib`), `collection` |
 | **Structure** | `granularity`, `time_column`, `length` (raw, pre-embed), `dtype`, `size_bytes` |
 | **Imbalance** | `N`, `n_normal`, `n_rare`, `IR`, `%Rare`, `imbalance_level`, plus the exact scoring params used: `rel_thres`, `rel_coef`, `rel_xtrm_type`, `k`, `embed`, `diff` |
-| **Characteristics** | `missing_pct`, `mean`, `std`, `cv`, `skewness`, `kurtosis`, `autocorr_lag1`, `adf_pvalue`, `is_stationary`, `seasonal_period` (granularity-keyed lookup, e.g. `24` for hourly — not a fitted decomposition) |
+| **Characteristics** | `missing_pct`, `mean`, `std`, `cv`, `skewness`, `kurtosis`, `autocorr_lag1`, `seasonal_period` (granularity-keyed lookup, e.g. `24` for hourly — not a fitted decomposition) |
 | **Provenance** | `content_hash` (`sha256(values)[:16]`, for integrity checks), `blob_path`, `hf_revision`, `pipeline_version`, `ingested_at` |
 
 `catalog/scanned.csv` holds every series ever scanned — accepted or not — with a `verdict` column (`accepted`/`rejected`). It's the audit trail proving *why* a series is absent from the catalog, and it doubles as the incremental-scan cache for future runs.
@@ -129,8 +129,7 @@ Useful flags:
 | `--collections a,b,c` | restrict to specific collections |
 | `--limit N` | cap new rows added per collection (`0` = no limit) |
 | `--resume` | skip ids already present in `--out`, so an interrupted run picks up where it left off |
-| `--with-adf` | also run the ADF stationarity test (`adf_pvalue`/`is_stationary`); several times slower, since it's a regression fit per series |
-| `--workers N` | parallel worker processes for scoring (default: all CPU cores) — most useful with `--with-adf`, since that's the CPU-bound step |
+| `--workers N` | parallel worker processes for scoring (default: all CPU cores) |
 
 The script flushes results after each collection completes, and a stalled network call times out (60s) into a logged `error` row rather than hanging the whole run — so a crash or a bad connection never loses more than the collection in progress.
 
@@ -142,9 +141,15 @@ The script flushes results after each collection completes, and a stalled networ
 python scripts/build_catalog.py --scan scan_results.csv --out-dir catalog
 ```
 
-**3. Mirror accepted series to Hugging Face** as per-series Parquet blobs (one file per accepted `id`), so the catalog CSVs stay small and git-diffable while the actual data lives somewhere built for it.
+**3. Mirror accepted series to Hugging Face** as per-series Parquet blobs (one file per accepted `id`), so the catalog CSVs stay small and git-diffable while the actual data lives somewhere built for it. Re-fetches each collection from source (values aren't stored in `scan_results.csv`), stages a Parquet per series under `--stage-dir`, then pushes the whole staged tree in one commit and fills `blob_path`/`size_bytes`/`hf_revision`/`pipeline_version`/`ingested_at` back into the catalog. Run as a module, not a script directly, since it imports across the package boundary:
 
-**CI**: `.github/workflows/ingest.yml` runs steps 1–2 on `workflow_dispatch` and opens a PR with the catalog diff — nothing runs on a schedule, since these sources don't change often enough to justify polling.
+```bash
+python -m scripts.upload_blobs --catalog catalog/series.csv --stage-dir /tmp/blobs
+```
+
+`--stage-only` stages without uploading (useful to sanity-check a collection first); `--collections a,b,c` restricts to a subset; already-staged files and already-committed blobs are both skipped on re-run, so a failed run (including through the documented flaky CloudFront route to `huggingface.co`) is fixed by running the same command again.
+
+**CI**: `.github/workflows/ingest.yml` runs steps 1–2 on `workflow_dispatch` and opens a PR with the catalog diff — nothing runs on a schedule, since these sources don't change often enough to justify polling. Step 3 is not wired into CI; it's a local, manual step (no HF credentials are stored in this repo).
 
 ## Development
 

@@ -98,6 +98,23 @@ def test_pull_raises_on_content_hash_mismatch(tmp_path):
         pull("gluonts:m4_hourly:h1", catalog=catalog, download_fn=lambda *a, **k: blob_path)
 
 
+def test_pull_verifies_hash_over_non_null_values(tmp_path):
+    # Blobs are staged raw (NaNs included, per the agreed blob format), but
+    # scan.py's content_hash is computed over the NaN-dropped scoring view --
+    # pull() must verify against the same non-null view, not the raw column.
+    blob_path = _write_blob(tmp_path, [1.0, np.nan, 3.0])
+    catalog = pd.DataFrame([{
+        "id": "gluonts:nn5_daily_with_missing:0", "blob_path": "gluonts/nn5_daily_with_missing/0.parquet",
+        "hf_revision": "main", "content_hash": _content_hash([1.0, 3.0]),
+    }])
+
+    result = pull("gluonts:nn5_daily_with_missing:0", catalog=catalog, download_fn=lambda *a, **k: blob_path)
+
+    assert result.tolist()[0] == 1.0
+    assert np.isnan(result.tolist()[1])
+    assert result.tolist()[2] == 3.0
+
+
 def test_pull_many_returns_one_series_per_id(tmp_path):
     values_a, values_b = [1.0, 2.0], [3.0, 4.0]
     blob_a, blob_b = _write_blob(tmp_path, values_a), tmp_path / "b.parquet"
