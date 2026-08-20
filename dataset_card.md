@@ -1,6 +1,8 @@
 ---
 pretty_name: imbalance-hub
-license: unknown
+license: other
+license_name: mixed-per-collection
+license_link: https://github.com/jpmsilva1/imbalance-hub/blob/main/dataset_card.md#licensing
 task_categories:
   - time-series-forecasting
 tags:
@@ -76,10 +78,11 @@ in the GitHub repo, or just use the catalog CSV's `blob_path` column directly.
 
 **No single license applies — this catalog spans sources with different terms, checked
 against the original loaders rather than assumed.** The curation layer (catalog metadata,
-imbalance-scoring methodology, pipeline code) is separate from the underlying values and
-is available under the
-[imbalance-hub GitHub repo](https://github.com/jpmsilva1/imbalance-hub)'s terms. For the
-raw values themselves:
+imbalance-scoring methodology, pipeline code) is separate from the underlying values: the
+code is [MIT-licensed](https://github.com/jpmsilva1/imbalance-hub/blob/main/LICENSE), which
+does **not** extend to the data — see
+[`DATA_LICENSES.md`](https://github.com/jpmsilva1/imbalance-hub/blob/main/DATA_LICENSES.md)
+for that scope split. For the raw values themselves:
 
 - **Most GluonTS collections** (`electricity`, `traffic`, `tourism_*`, `nn5_*`, `weather`,
   `wind_farms_*`, `m1_*`, and most others fetched via GluonTS's
@@ -89,9 +92,13 @@ raw values themselves:
   **[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)** — verified directly against
   the [NN5 Daily record](https://zenodo.org/record/4656110).
 - **M4** (`m4_*` — GluonTS's largest single contributor by series count) is fetched from
-  [`M4Competition/M4-methods`](https://github.com/M4Competition/M4-methods) on GitHub,
-  which **carries no LICENSE file and no license declared** (confirmed via the GitHub API).
-  Treat M4 series as unclear rights until the competition organizers state otherwise.
+  [`M4Competition/M4-methods`](https://github.com/M4Competition/M4-methods) on GitHub.
+  **That repository publishes no license** (confirmed via the GitHub API): no LICENSE
+  file, no license declared anywhere. Under default copyright, that means no redistribution
+  rights have been granted for this data, by imbalance-hub or by anyone else who mirrors
+  it. It's rehosted here in line with common practice in the forecasting field, not because
+  the rights question is resolved. If the M4 organizers ever ask, these series will be
+  removed from the Hugging Face mirror on request.
 - **TSLib** (`ETT-small`, `electricity`, `exchange_rate`, `illness`, `traffic`, `weather`)
   — the [thuml/Time-Series-Library](https://github.com/thuml/Time-Series-Library) repo
   itself is **MIT-licensed**, but that covers the code; the bundled benchmark CSVs'

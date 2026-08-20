@@ -45,6 +45,6 @@ jobs:
         uses: peter-evans/create-pull-request@v6
         with:
           add-paths: catalog/series.csv,catalog/scanned.csv
-          commit-message: "Update catalog from scheduled ingest"
+          commit-message: "Update catalog from ingest run"
           title: "Ingest: update catalog"
           branch: ingest-update

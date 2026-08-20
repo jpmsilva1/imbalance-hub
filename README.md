@@ -15,12 +15,21 @@ series = pull(severe_hourly.id.iloc[0])   # -> pd.Series, values ready to use
 
 ## Contents
 
+- [License](#license)
 - [Quick start](#quick-start)
 - [How it works](#how-it-works)
 - [Catalog schema](#catalog-schema)
 - [Client API](#client-api)
 - [How the catalog is built](#how-the-catalog-is-built)
 - [Development](#development)
+
+## License
+
+The code in this repo (`imbalance_hub/`, `scripts/`) is [MIT](LICENSE). That does **not**
+cover the catalog data — the series values redistributed via the Hugging Face mirror come
+from third-party sources with their own, differing terms. See
+[`DATA_LICENSES.md`](DATA_LICENSES.md) for the scope split and `dataset_card.md`'s
+"Licensing" section for the full per-collection breakdown.
 
 ## Quick start
 

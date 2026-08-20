@@ -7,7 +7,9 @@ name = "imbalance-hub"
 version = "0.1.0"
 description = "Client for the curated catalog of imbalanced time series."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+classifiers = ["License :: OSI Approved :: MIT License"]
 dependencies = [
     "pandas",
     "numpy",
