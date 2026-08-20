@@ -37,7 +37,7 @@ pip install git+https://github.com/jpmsilva1/imbalance-hub.git
 from imbalance_hub import load_catalog, pull
 
 catalog = load_catalog()
-severe_hourly = catalog[(catalog.imbalance_level == "severe") & (catalog.granularity.isin(["H", "h", "1H"]))]
+severe_hourly = catalog[(catalog.imbalance_level == "severe") & (catalog.granularity == "H")]
 
 series = pull(severe_hourly.id.iloc[0])   # -> pd.Series, values ready to use
 
@@ -80,7 +80,7 @@ and the complete numeric-distribution table live in the
 |---|---|
 | `source` | `gluonts` (58,354), `tslib` (1,135) |
 | `imbalance_level` | `moderate` (32,867), `severe` (13,256), `mild` (12,194), `extreme` (1,172) |
-| `granularity` | 18 raw, **un-normalized** strings (`H`/`h`/`1H` are all "hourly", `30min`/`0.5h` are the same interval spelled two ways) — filter with `.isin([...])` across every spelling, e.g. `catalog.granularity.isin(["H", "h", "1H"])` |
+| `granularity` | 12 canonical values (normalized from source-inconsistent notation), from `min` up to `Y` — see the GitHub README's [Filterable values](https://github.com/jpmsilva1/imbalance-hub#catalog-schema) for the full duration-ordered table |
 | `collection` | 55 distinct, from `m4_monthly` (16,998) down to single-series collections |
 
 Numeric ranges (min / median / max) for the columns most people filter on:

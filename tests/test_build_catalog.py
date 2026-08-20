@@ -78,6 +78,27 @@ def test_skipped_and_error_rows_are_audited_but_excluded_from_series_csv():
     assert set(scanned_df["verdict"]) == {"rejected"}
 
 
+def test_granularity_aliases_are_normalized_to_one_canonical_spelling():
+    scan_df = pd.DataFrame([
+        _scan_row(id="gluonts:m4_hourly:h1", granularity="1H"),
+        _scan_row(id="gluonts:m4_hourly:h2", granularity="h"),
+        _scan_row(id="gluonts:m4_hourly:h3", granularity="H"),
+        _scan_row(id="gluonts:m1_business:b1", granularity="1B"),
+        _scan_row(id="tslib:weather:w1", granularity="0.5h"),
+    ])
+
+    series_df, _ = build_catalog(scan_df)
+
+    by_id = series_df.set_index("id")["granularity"]
+    assert by_id["gluonts:m4_hourly:h1"] == "H"
+    assert by_id["gluonts:m4_hourly:h2"] == "H"
+    assert by_id["gluonts:m4_hourly:h3"] == "H"
+    assert by_id["gluonts:m1_business:b1"] == "B"
+    assert by_id["tslib:weather:w1"] == "30min"
+    # seasonal_period lookup still resolves correctly post-normalization.
+    assert series_df.set_index("id")["seasonal_period"]["tslib:weather:w1"] == 48
+
+
 def test_series_csv_is_sorted_by_id():
     scan_df = pd.DataFrame([
         _scan_row(id="gluonts:z_collection:9"),

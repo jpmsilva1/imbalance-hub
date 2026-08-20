@@ -18,18 +18,29 @@ K = 10
 EMBED = True
 DIFF = False
 
+# Sources report the same frequency under different spellings (GluonTS vs.
+# TSLib, or inconsistent pandas-alias casing) -- collapse those to one
+# canonical string before anything downstream (seasonal_period lookup,
+# published catalog) has to deal with duplicates.
+GRANULARITY_ALIASES = {
+    "1H": "H", "h": "H", "1h": "H",
+    "1B": "B",
+    "0.5h": "30min",
+}
+
 # ponytail: coarse granularity -> period lookup, not a fitted seasonal
 # decomposition (matches the plan's explicit "24/hourly, 7/daily, 12/monthly"
-# example). Covers every granularity string observed in scan_results.csv;
-# extend when a new one shows up rather than trying to parse freq strings.
+# example). Covers every canonical granularity string observed in
+# scan_results.csv (post GRANULARITY_ALIASES normalization); extend when a
+# new one shows up rather than trying to parse freq strings.
 SEASONAL_PERIOD = {
-    "H": 24, "1H": 24, "h": 24, "1h": 24,
-    "D": 7, "B": 5, "1B": 5,
+    "H": 24,
+    "D": 7, "B": 5,
     "W": 52, "W-TUE": 52,
     "M": 12, "1M": 12,
     "Q": 4,
     "Y": 1,
-    "min": 1440, "10min": 144, "15min": 96, "30min": 48, "0.5h": 48,
+    "min": 1440, "10min": 144, "15min": 96, "30min": 48,
 }
 
 SERIES_COLUMNS = [
@@ -58,6 +69,7 @@ def build_catalog(scan_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     accepted_mask = (scan_df["status"] == "ok") & (scan_df["n_rare"] > 0)
 
     series_df = scan_df[accepted_mask].copy()
+    series_df["granularity"] = series_df["granularity"].replace(GRANULARITY_ALIASES)
     series_df["size_bytes"] = pd.NA
     series_df["rel_thres"] = REL_THRES
     series_df["rel_coef"] = REL_COEF

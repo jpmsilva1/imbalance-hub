@@ -11,7 +11,7 @@ Instead of hunting down datasets and hand-checking whether they're actually imba
 from imbalance_hub import load_catalog, pull
 
 catalog = load_catalog()
-severe_hourly = catalog[(catalog.imbalance_level == "severe") & (catalog.granularity.isin(["H", "h", "1H"]))]
+severe_hourly = catalog[(catalog.imbalance_level == "severe") & (catalog.granularity == "H")]
 
 series = pull(severe_hourly.id.iloc[0])   # -> pd.Series, values ready to use
 ```
@@ -68,10 +68,9 @@ m4_candidates = catalog[
     & (catalog.length >= 200)
 ]
 
-# Hourly-granularity series (accounting for the three raw spellings) with
-# no missing values and a strong rare regime.
+# Hourly-granularity series with no missing values and a strong rare regime.
 hourly_clean = catalog[
-    catalog.granularity.isin(["H", "h", "1H"])
+    (catalog.granularity == "H")
     & (catalog.missing_pct == 0)
     & (catalog["%Rare"] < 5)
 ]
@@ -146,19 +145,23 @@ What you can actually pass to `.isin([...])` / comparisons in the Quick start ex
 
 **`time_column`**: `NaN` for every `gluonts` row, `"date"` for every `tslib` row — effectively a `source`-keyed flag, not an independent axis to filter on.
 
-**`granularity`** — **raw strings from each source's native frequency notation, not normalized.** `H`, `h`, and `1H` all mean "hourly" but are three different strings; same for `30min`/`0.5h`. Filter with `.isin([...])` across every spelling you care about, e.g. `catalog.granularity.isin(["H", "h", "1H"])` for hourly. This is deliberate — normalizing it is a separate data-quality task, not part of this catalog's current guarantees.
+**`granularity`** — normalized to one canonical spelling per frequency (raw source data used inconsistent notation for the same interval — e.g. `H`/`h`/`1H` all meant hourly, `1B` and `B` both meant business-day, `30min`/`0.5h` both meant a 30-minute interval; `scripts/build_catalog.py`'s `GRANULARITY_ALIASES` collapses these before publishing). Sorted below by actual duration, shortest first:
 
-| Value | Count | | Value | Count |
-|---|---|---|---|---|
-| `M` | 20,129 | | `W` | 528 |
-| `D` | 15,606 | | `1h` | 243 |
-| `Q` | 6,529 | | `min` | 201 |
-| `0.5h` | 5,561 | | `10min` | 125 |
-| `Y` | 4,517 | | `1H` | 93 |
-| `h` | 2,860 | | `15min` | 24 |
-| `H` | 1,855 | | *(missing)* | 20 |
-| `30min` | 1,181 | | `W-TUE` | 7 |
-| | | | `1B` / `B` | 5 each |
+| Value | Duration | Count |
+|---|---|---|
+| `min` | 1 minute | 201 |
+| `10min` | 10 minutes | 125 |
+| `15min` | 15 minutes | 24 |
+| `30min` | 30 minutes | 6,742 |
+| `H` | 1 hour | 5,051 |
+| `D` | 1 day | 15,606 |
+| `B` | 1 business day | 10 |
+| `W` | 1 week | 528 |
+| `W-TUE` | 1 week, anchored Tuesday | 7 |
+| `M` | 1 month | 20,129 |
+| `Q` | 1 quarter | 6,529 |
+| `Y` | 1 year | 4,517 |
+| *(missing)* | — | 20 |
 
 **`collection`** — 55 distinct values. The largest:
 
