@@ -15,8 +15,28 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      # --resume only helps if scan_results.csv survives between runs -- the
+      # checkout above never has it (gitignored), so without this restore
+      # every run rescanned all ~136k series from scratch and risked
+      # exceeding the 6h job limit. restore-keys falls back to the most
+      # recent cache from any prior run; save (always, even on failure/
+      # timeout) writes a fresh entry so the next run can pick up from here.
+      - name: Restore scan cache
+        uses: actions/cache/restore@v4
+        with:
+          path: scan_results.csv
+          key: scan-results-${{ github.run_id }}
+          restore-keys: scan-results-
+
       - name: Scan sources
         run: python scripts/scan.py --out scan_results.csv --resume
+
+      - name: Save scan cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: scan_results.csv
+          key: scan-results-${{ github.run_id }}
 
       - name: Build catalog CSVs
         run: python scripts/build_catalog.py --scan scan_results.csv --out-dir catalog

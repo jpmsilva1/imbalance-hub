@@ -1,6 +1,6 @@
 import pandas as pd
 
-from imbalance_hub.catalog import _ref_for, load_catalog
+from imbalance_hub.catalog import _is_cacheable, _ref_for, load_catalog
 
 
 def test_ref_for_latest_resolves_to_main_branch():
@@ -12,6 +12,17 @@ def test_ref_for_latest_resolves_to_main_branch():
 
 def test_ref_for_pinned_version_passes_through_unchanged():
     assert _ref_for("v1.0.0") == "v1.0.0"
+
+
+def test_is_cacheable_false_for_latest():
+    # "latest" caching forever was a real bug: a user's first load_catalog()
+    # call would silently pin them to whatever was published that moment,
+    # with no way back to freshness short of refresh=True.
+    assert _is_cacheable("latest") is False
+
+
+def test_is_cacheable_true_for_pinned_version():
+    assert _is_cacheable("v1.0.0") is True
 
 
 def test_load_catalog_fetches_from_source_and_caches(tmp_path):
