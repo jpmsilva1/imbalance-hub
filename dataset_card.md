@@ -2,7 +2,7 @@
 pretty_name: imbalance-hub
 license: other
 license_name: mixed-per-collection
-license_link: https://github.com/jpmsilva1/imbalance-hub/blob/main/dataset_card.md#licensing
+license_link: https://github.com/jpmsilva1/imbalance-ts-hub/blob/main/dataset_card.md#licensing
 task_categories:
   - time-series-forecasting
 tags:
@@ -23,14 +23,14 @@ methodology from Moniz, Branco & Torgo, 2017) and kept only if it actually has a
 regime worth studying.
 
 The catalog metadata and client library live in the companion GitHub repo,
-**[jpmsilva1/imbalance-hub](https://github.com/jpmsilva1/imbalance-hub)** — start there for
+**[jpmsilva1/imbalance-ts-hub](https://github.com/jpmsilva1/imbalance-ts-hub)** — start there for
 the schema, the scoring methodology, and how the catalog is built. This dataset repo holds
 the actual data: one Parquet file per accepted series.
 
 ## Quick start
 
 ```bash
-pip install git+https://github.com/jpmsilva1/imbalance-hub.git
+pip install git+https://github.com/jpmsilva1/imbalance-ts-hub.git
 ```
 
 ```python
@@ -68,21 +68,21 @@ file limit — an implementation detail, not part of the catalog id). Each file 
 
 The catalog id (`source:collection:key`, e.g. `gluonts:m4_hourly:h1`) is what maps an id to
 its blob path — see `blob_path_for()` in
-[`scripts/upload_blobs.py`](https://github.com/jpmsilva1/imbalance-hub/blob/main/scripts/upload_blobs.py)
+[`scripts/upload_blobs.py`](https://github.com/jpmsilva1/imbalance-ts-hub/blob/main/scripts/upload_blobs.py)
 in the GitHub repo, or just use the catalog CSV's `blob_path` column directly.
 
 ## Filterable columns
 
 The columns you'll actually filter `load_catalog()`'s DataFrame on. Full column list/types
 and the complete numeric-distribution table live in the
-[GitHub README's Catalog schema section](https://github.com/jpmsilva1/imbalance-hub#catalog-schema).
+[GitHub README's Catalog schema section](https://github.com/jpmsilva1/imbalance-ts-hub#catalog-schema).
 
 | Column | Values |
 |---|---|
 | `source` | `gluonts` (58,354), `tslib` (1,135) |
 | `license` | `cc-by-4.0` (28,868), `unlicensed` (29,486), `unknown` (1,135) — see [Licensing](#licensing) |
 | `imbalance_level` | `moderate` (32,867), `severe` (13,256), `mild` (12,194), `extreme` (1,172) |
-| `granularity` | 12 canonical values (normalized from source-inconsistent notation), from `min` up to `Y` — see the GitHub README's [Filterable values](https://github.com/jpmsilva1/imbalance-hub#catalog-schema) for the full duration-ordered table |
+| `granularity` | 12 canonical values (normalized from source-inconsistent notation), from `min` up to `Y` — see the GitHub README's [Filterable values](https://github.com/jpmsilva1/imbalance-ts-hub#catalog-schema) for the full duration-ordered table |
 | `collection` | 55 distinct, from `m4_monthly` (16,998) down to single-series collections |
 
 Numeric ranges (min / median / max) for the columns most people filter on:
@@ -109,9 +109,9 @@ Numeric ranges (min / median / max) for the columns most people filter on:
 **No single license applies — this catalog spans sources with different terms, checked
 against the original loaders rather than assumed.** The curation layer (catalog metadata,
 imbalance-scoring methodology, pipeline code) is separate from the underlying values: the
-code is [MIT-licensed](https://github.com/jpmsilva1/imbalance-hub/blob/main/LICENSE), which
+code is [MIT-licensed](https://github.com/jpmsilva1/imbalance-ts-hub/blob/main/LICENSE), which
 does **not** extend to the data — see
-[`DATA_LICENSES.md`](https://github.com/jpmsilva1/imbalance-hub/blob/main/DATA_LICENSES.md)
+[`DATA_LICENSES.md`](https://github.com/jpmsilva1/imbalance-ts-hub/blob/main/DATA_LICENSES.md)
 for that scope split. For the raw values themselves:
 
 - **Most GluonTS collections** (`electricity`, `traffic`, `tourism_*`, `nn5_*`, `weather`,
@@ -146,7 +146,7 @@ To cite the catalog itself:
   author  = {Silva, João P. M.},
   title   = {imbalance-hub},
   year    = {2026},
-  url     = {https://github.com/jpmsilva1/imbalance-hub}
+  url     = {https://github.com/jpmsilva1/imbalance-ts-hub}
 }
 ```
 

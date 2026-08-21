@@ -8,7 +8,7 @@ import pandas as pd
 
 from .catalog import load_catalog
 
-HF_REPO = "jpms5/imbalance-hub"
+HF_REPO = "jpms5/imbalance-ts-hub"
 
 
 def _content_hash(values):

@@ -7,6 +7,6 @@ authors:
   - family-names: Silva
     given-names: "João P. M."
 type: software
-url: "https://github.com/jpmsilva1/imbalance-hub"
-repository-code: "https://github.com/jpmsilva1/imbalance-hub"
+url: "https://github.com/jpmsilva1/imbalance-ts-hub"
+repository-code: "https://github.com/jpmsilva1/imbalance-ts-hub"
 license: MIT

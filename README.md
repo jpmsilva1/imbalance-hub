@@ -1,7 +1,7 @@
 # Imbalanced Time-Series Hub
 
-[![Code: MIT](https://img.shields.io/github/license/jpmsilva1/imbalance-hub?label=code)](LICENSE) 
-[![Ingest](https://github.com/jpmsilva1/imbalance-hub/actions/workflows/ingest.yml/badge.svg)](https://github.com/jpmsilva1/imbalance-hub/actions/workflows/ingest.yml)
+[![Code: MIT](https://img.shields.io/github/license/jpmsilva1/imbalance-ts-hub?label=code)](LICENSE) 
+[![Ingest](https://github.com/jpmsilva1/imbalance-ts-hub/actions/workflows/ingest.yml/badge.svg)](https://github.com/jpmsilva1/imbalance-ts-hub/actions/workflows/ingest.yml)
 
 A curated, versioned catalog of **imbalanced time series**. Every series in it has been scored with [`imbalance_eval`](https://github.com/jpmsilva1/imbalance_eval) (the relevance-function methodology from Moniz, Branco & Torgo 2017) and kept only if it actually has a rare regime worth studying.
 
@@ -37,7 +37,7 @@ from third-party sources with their own, differing terms. See
 ## Quick start
 
 ```bash
-pip install git+https://github.com/jpmsilva1/imbalance-hub.git
+pip install git+https://github.com/jpmsilva1/imbalance-ts-hub.git
 ```
 
 *(Not yet published to PyPI — installing from the git repo works today; `pip install imbalance-hub` will once it is.)*
@@ -276,7 +276,7 @@ python -m scripts.upload_blobs --catalog catalog/series.csv --stage-dir /tmp/blo
   author  = {Silva, João P. M.},
   title   = {imbalance-hub},
   year    = {2026},
-  url     = {https://github.com/jpmsilva1/imbalance-hub}
+  url     = {https://github.com/jpmsilva1/imbalance-ts-hub}
 }
 ```
 
