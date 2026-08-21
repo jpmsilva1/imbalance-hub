@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use imbalance-hub, please cite it as below."
+title: imbalance-hub
+version: 0.1.0
+date-released: 2026-08-21
+authors:
+  - family-names: Silva
+    given-names: "João P. M."
+type: software
+url: "https://github.com/jpmsilva1/imbalance-hub"
+repository-code: "https://github.com/jpmsilva1/imbalance-hub"
+license: MIT

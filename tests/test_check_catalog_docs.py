@@ -5,7 +5,7 @@ from scripts.check_catalog_docs import compute_reference, diff_reference
 
 def _catalog_row(**overrides):
     row = {
-        "source": "gluonts", "collection": "m4_monthly", "granularity": "M",
+        "source": "gluonts", "collection": "m4_monthly", "license": "unlicensed", "granularity": "M",
         "time_column": None, "dtype": "float64",
         "N": 100, "IR": 5.0, "%Rare": 10.0, "length": 100,
         "missing_pct": 0.0, "seasonal_period": 12, "imbalance_level": "moderate",

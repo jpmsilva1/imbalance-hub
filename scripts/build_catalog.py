@@ -44,7 +44,7 @@ SEASONAL_PERIOD = {
 }
 
 SERIES_COLUMNS = [
-    "id", "name", "source", "collection",
+    "id", "name", "source", "collection", "license",
     "granularity", "time_column", "length", "dtype", "size_bytes",
     "N", "n_normal", "n_rare", "IR", "%Rare", "imbalance_level",
     "rel_thres", "rel_coef", "rel_xtrm_type", "k", "embed", "diff",
@@ -70,6 +70,13 @@ def build_catalog(scan_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     series_df = scan_df[accepted_mask].copy()
     series_df["granularity"] = series_df["granularity"].replace(GRANULARITY_ALIASES)
+    # Per dataset_card.md's Licensing section: M4 (GluonTS's m4_* collections)
+    # carries no declared license; TSLib's bundled CSV licenses are unstated;
+    # every other GluonTS collection comes from the Monash/Zenodo archive
+    # under CC BY 4.0.
+    series_df["license"] = "cc-by-4.0"
+    series_df.loc[series_df["collection"].astype(str).str.startswith("m4"), "license"] = "unlicensed"
+    series_df.loc[series_df["source"] == "tslib", "license"] = "unknown"
     series_df["size_bytes"] = pd.NA
     series_df["rel_thres"] = REL_THRES
     series_df["rel_coef"] = REL_COEF

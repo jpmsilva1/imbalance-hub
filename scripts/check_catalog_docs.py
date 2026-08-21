@@ -37,6 +37,7 @@ def _round(value, col):
 def compute_reference(df: pd.DataFrame) -> dict:
     ref = {"row_count": len(df)}
     ref["source"] = df["source"].value_counts().to_dict()
+    ref["license"] = df["license"].value_counts().to_dict()
     ref["imbalance_level"] = df["imbalance_level"].value_counts().to_dict()
     ref["dtype"] = df["dtype"].value_counts().to_dict()
 

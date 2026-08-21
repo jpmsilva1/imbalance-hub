@@ -99,6 +99,21 @@ def test_granularity_aliases_are_normalized_to_one_canonical_spelling():
     assert series_df.set_index("id")["seasonal_period"]["tslib:weather:w1"] == 48
 
 
+def test_license_is_assigned_by_source_and_collection():
+    scan_df = pd.DataFrame([
+        _scan_row(id="gluonts:m4_monthly:1", source="gluonts", collection="m4_monthly"),
+        _scan_row(id="gluonts:nn5_daily:1", source="gluonts", collection="nn5_daily"),
+        _scan_row(id="tslib:traffic:1", source="tslib", collection="traffic"),
+    ])
+
+    series_df, _ = build_catalog(scan_df)
+
+    by_id = series_df.set_index("id")["license"]
+    assert by_id["gluonts:m4_monthly:1"] == "unlicensed"
+    assert by_id["gluonts:nn5_daily:1"] == "cc-by-4.0"
+    assert by_id["tslib:traffic:1"] == "unknown"
+
+
 def test_series_csv_is_sorted_by_id():
     scan_df = pd.DataFrame([
         _scan_row(id="gluonts:z_collection:9"),

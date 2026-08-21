@@ -1,6 +1,6 @@
 # imbalance-hub
 
-[![License: MIT](https://img.shields.io/github/license/jpmsilva1/imbalance-hub)](LICENSE)
+[![Code: MIT](https://img.shields.io/github/license/jpmsilva1/imbalance-hub?label=code)](LICENSE) · data: see [DATA_LICENSES.md](DATA_LICENSES.md)
 [![Ingest](https://github.com/jpmsilva1/imbalance-hub/actions/workflows/ingest.yml/badge.svg)](https://github.com/jpmsilva1/imbalance-hub/actions/workflows/ingest.yml)
 
 A curated, versioned catalog of **imbalanced time series** — "OpenML for imbalanced time series." Every series in it has been scored with [`imbalance_eval`](https://github.com/jpmsilva1/imbalance_eval) (the relevance-function methodology from Moniz, Branco & Torgo 2017) and kept only if it actually has a rare regime worth studying.
@@ -60,6 +60,8 @@ print(candidates[["id", "collection", "N", "n_rare", "%Rare", "imbalance_level"]
 # Pull just the series you actually want.
 series = pull(candidates.id.iloc[0])          # -> pd.Series
 batch = pull_many(candidates.id.head(20))     # -> dict[id, pd.Series]
+# `gluonts` series come back with an integer step index; only `tslib` series
+# carry real timestamps (`pull` returns a `DatetimeIndex` when the source had one).
 
 # Long severe/extreme series from a specific collection.
 m4_candidates = catalog[
@@ -78,7 +80,7 @@ hourly_clean = catalog[
 
 See [Filterable values](#filterable-values) below for the full domain of every column above.
 
-`load_catalog()` fetches `catalog/series.csv` once and caches it locally (`~/.cache/imbalance_hub/`), so filtering and re-filtering costs nothing after the first call. `pull()`/`pull_many()` only download the Parquet blob for the specific series you ask for — the catalog is metadata-only, so browsing 59k+ series doesn't mean downloading 59k+ series.
+`load_catalog()` caches `catalog/series.csv` locally (`~/.cache/imbalance_hub/`). Pinned versions (`load_catalog(version="<tag-or-sha>")`) are served straight from that cache once fetched — they can't change. The default `version="latest"` always re-checks with the server, but via a conditional request: if the catalog hasn't changed since your last call, the ~24MB body isn't re-downloaded, only a small "not modified" response is. `pull()`/`pull_many()` only download the Parquet blob for the specific series you ask for — the catalog is metadata-only, so browsing 59k+ series doesn't mean downloading 59k+ series.
 
 ## How it works
 
@@ -115,7 +117,7 @@ Scoring params are fixed to match the paper across the whole catalog: `rel_thres
 
 | Group | Columns |
 |---|---|
-| **Identity** | `id` (`source:collection:key`, e.g. `gluonts:m4_hourly:h1`), `name`, `source` (`gluonts`/`tslib`), `collection` |
+| **Identity** | `id` (`source:collection:key`, e.g. `gluonts:m4_hourly:h1`), `name`, `source` (`gluonts`/`tslib`), `collection`, `license` (`cc-by-4.0`/`unlicensed`/`unknown` — see [Licensing](#license)) |
 | **Structure** | `granularity`, `time_column`, `length` (raw, pre-embed), `dtype`, `size_bytes` |
 | **Imbalance** | `N`, `n_normal`, `n_rare`, `IR`, `%Rare`, `imbalance_level`, plus the exact scoring params used: `rel_thres`, `rel_coef`, `rel_xtrm_type`, `k`, `embed`, `diff` |
 | **Characteristics** | `missing_pct`, `mean`, `std`, `cv`, `skewness`, `kurtosis`, `autocorr_lag1`, `seasonal_period` (granularity-keyed lookup, e.g. `24` for hourly — not a fitted decomposition) |
@@ -131,6 +133,14 @@ What you can actually pass to `.isin([...])` / comparisons in the Quick start ex
 |---|---|
 | `gluonts` | 58,354 |
 | `tslib` | 1,135 |
+
+**`license`** — see [License](#license) for what each value permits.
+
+| Value | Count |
+|---|---|
+| `cc-by-4.0` | 28,868 |
+| `unlicensed` | 29,486 |
+| `unknown` | 1,135 |
 
 **`imbalance_level`** — see the severity table in [How it works](#how-it-works) for how this is derived from `%Rare`.
 
@@ -258,6 +268,20 @@ python -m scripts.upload_blobs --catalog catalog/series.csv --stage-dir /tmp/blo
 `--stage-only` stages without uploading (useful to sanity-check a collection first); `--collections a,b,c` restricts to a subset; already-staged files and already-committed blobs are both skipped on re-run, so a failed run (including through the documented flaky CloudFront route to `huggingface.co`) is fixed by running the same command again.
 
 **CI**: `.github/workflows/ingest.yml` runs steps 1–2 on `workflow_dispatch` and opens a PR with the catalog diff — nothing runs on a schedule, since these sources don't change often enough to justify polling. Step 3 is not wired into CI; it's a local, manual step (no HF credentials are stored in this repo).
+
+## Citation
+
+```bibtex
+@software{silva2026imbalancehub,
+  author  = {Silva, João P. M.},
+  title   = {imbalance-hub},
+  year    = {2026},
+  url     = {https://github.com/jpmsilva1/imbalance-hub}
+}
+```
+
+Machine-readable version in [`CITATION.cff`](CITATION.cff). No DOI yet — a Zenodo deposit
+is planned but not done.
 
 ## Development
 

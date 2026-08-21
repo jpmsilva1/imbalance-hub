@@ -1,6 +1,7 @@
 """Pull one or more accepted series from the HF blob mirror by catalog id."""
 import hashlib
 import posixpath
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import pandas as pd
@@ -60,4 +61,7 @@ def pull(id_: str, catalog: pd.DataFrame | None = None, download_fn=None) -> pd.
 
 def pull_many(ids, catalog: pd.DataFrame | None = None, download_fn=None) -> dict:
     cat = catalog if catalog is not None else load_catalog()
-    return {id_: pull(id_, catalog=cat, download_fn=download_fn) for id_ in ids}
+    unique_ids = list(dict.fromkeys(ids))  # de-dupe, preserve order; repeats would download twice
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        series = pool.map(lambda id_: pull(id_, catalog=cat, download_fn=download_fn), unique_ids)
+        return dict(zip(unique_ids, series))

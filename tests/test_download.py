@@ -131,3 +131,37 @@ def test_pull_many_returns_one_series_per_id(tmp_path):
     assert set(result.keys()) == {"a:x:1", "b:x:1"}
     assert result["a:x:1"].tolist() == values_a
     assert result["b:x:1"].tolist() == values_b
+
+
+def test_pull_many_dedups_repeated_ids(tmp_path):
+    values = [1.0, 2.0]
+    blob_path = _write_blob(tmp_path, values)
+    catalog = pd.DataFrame([{
+        "id": "a:x:1", "blob_path": "a.parquet", "hf_revision": "main", "content_hash": _content_hash(values),
+    }])
+    calls = []
+
+    def download_fn(*a, **k):
+        calls.append(a)
+        return blob_path
+
+    result = pull_many(["a:x:1", "a:x:1"], catalog=catalog, download_fn=download_fn)
+
+    assert list(result.keys()) == ["a:x:1"]
+    assert len(calls) == 1
+
+
+def test_pull_many_preserves_first_occurrence_order(tmp_path):
+    values_a, values_b = [1.0], [2.0]
+    blob_a, blob_b = _write_blob(tmp_path, values_a), tmp_path / "b.parquet"
+    pd.DataFrame({"value": values_b}).to_parquet(blob_b)
+    catalog = pd.DataFrame([
+        {"id": "a:x:1", "blob_path": "a.parquet", "hf_revision": "main", "content_hash": _content_hash(values_a)},
+        {"id": "b:x:1", "blob_path": "b.parquet", "hf_revision": "main", "content_hash": _content_hash(values_b)},
+    ])
+    paths = {"a.parquet": blob_a, "b.parquet": blob_b}
+
+    result = pull_many(["b:x:1", "a:x:1", "b:x:1"], catalog=catalog,
+                        download_fn=lambda blob_path, revision: paths[blob_path])
+
+    assert list(result.keys()) == ["b:x:1", "a:x:1"]

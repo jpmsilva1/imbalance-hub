@@ -35,6 +35,11 @@
     "moderate": 32867,
     "severe": 13256
   },
+  "license": {
+    "cc-by-4.0": 28868,
+    "unknown": 1135,
+    "unlicensed": 29486
+  },
   "numeric": {
     "%Rare": {
       "25%": 5.08,

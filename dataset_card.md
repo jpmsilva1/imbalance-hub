@@ -50,9 +50,10 @@ candidates = catalog[
 ```
 
 `load_catalog()` fetches the metadata CSV from GitHub (not from this repo) and caches it
-locally; `pull()` downloads only the one Parquet blob you asked for from here, verified
-against a `content_hash` recorded in the catalog. Browsing the catalog's 59k+ rows never
-downloads more than the metadata.
+locally, re-checking with a conditional request on the default `version="latest"` so an
+unchanged catalog isn't re-downloaded; `pull()` downloads only the one Parquet blob you
+asked for from here, verified against a `content_hash` recorded in the catalog. Browsing
+the catalog's 59k+ rows never downloads more than the metadata.
 
 ## Dataset structure
 
@@ -79,6 +80,7 @@ and the complete numeric-distribution table live in the
 | Column | Values |
 |---|---|
 | `source` | `gluonts` (58,354), `tslib` (1,135) |
+| `license` | `cc-by-4.0` (28,868), `unlicensed` (29,486), `unknown` (1,135) — see [Licensing](#licensing) |
 | `imbalance_level` | `moderate` (32,867), `severe` (13,256), `mild` (12,194), `extreme` (1,172) |
 | `granularity` | 12 canonical values (normalized from source-inconsistent notation), from `min` up to `Y` — see the GitHub README's [Filterable values](https://github.com/jpmsilva1/imbalance-hub#catalog-schema) for the full duration-ordered table |
 | `collection` | 55 distinct, from `m4_monthly` (16,998) down to single-series collections |
@@ -137,7 +139,18 @@ that series' actual source collection rather than relying on this summary.
 
 ## Citation
 
-If you use this catalog's imbalance scoring, cite the methodology it implements:
+To cite the catalog itself:
+
+```bibtex
+@software{silva2026imbalancehub,
+  author  = {Silva, João P. M.},
+  title   = {imbalance-hub},
+  year    = {2026},
+  url     = {https://github.com/jpmsilva1/imbalance-hub}
+}
+```
+
+If you use this catalog's imbalance scoring, also cite the methodology it implements:
 
 ```bibtex
 @article{moniz2017resampling,
