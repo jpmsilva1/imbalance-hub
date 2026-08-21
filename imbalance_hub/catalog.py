@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-GITHUB_REPO = "jpmsilva1/imbalance-hub"
+GITHUB_REPO = "jpmsilva1/imbalance-ts-hub"
 DEFAULT_CACHE_DIR = Path.home() / ".cache" / "imbalance_hub"
 
 
