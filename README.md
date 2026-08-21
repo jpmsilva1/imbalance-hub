@@ -213,7 +213,7 @@ from imbalance_hub import load_catalog, pull, pull_many
 
 - **`load_catalog(version="latest", refresh=False)`** → `pd.DataFrame`. One HTTP GET, cached at `~/.cache/imbalance_hub/{version}/series.csv`. Pass `refresh=True` to bypass the cache and re-fetch.
 - **`pull(id)`** → `pd.Series`. Downloads the series' Parquet blob (cached via `huggingface_hub`'s own cache), verifies it against the catalog's `content_hash`, and returns it — `DatetimeIndex` if the source series had timestamps, integer index otherwise. Raises `KeyError` for an unknown id, `ValueError` if the blob doesn't exist yet or fails the hash check.
-- **`pull_many(ids)`** → `dict[str, pd.Series]`. Same as `pull`, batched.
+- **`pull_many(ids, errors="raise")`** → `dict[str, pd.Series]`. Same as `pull`, batched (concurrent, deduped, insertion-order preserved). `errors="raise"` (default) aborts on the first bad id, like `pull`; `errors="skip"` drops failed ids and returns only the series that succeeded.
 
 There's deliberately no `search()`/query-DSL wrapper — the catalog is a plain DataFrame, and pandas is the query layer. You already know how to filter a DataFrame.
 

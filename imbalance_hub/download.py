@@ -59,9 +59,29 @@ def pull(id_: str, catalog: pd.DataFrame | None = None, download_fn=None) -> pd.
     return pd.Series(df["value"].to_numpy(), name=id_)
 
 
-def pull_many(ids, catalog: pd.DataFrame | None = None, download_fn=None) -> dict:
+def pull_many(ids, catalog: pd.DataFrame | None = None, download_fn=None, errors: str = "raise") -> dict:
+    """Fetch multiple series by catalog id, concurrently.
+
+    `errors="raise"` (default) aborts on the first failure, matching `pull()`.
+    `errors="skip"` collects failures instead of raising, returning only the
+    series that succeeded -- useful when pulling a large batch where a few
+    missing/broken ids shouldn't sink the whole call.
+    """
+    if errors not in ("raise", "skip"):
+        raise ValueError(f"errors must be 'raise' or 'skip', got {errors!r}")
+
     cat = catalog if catalog is not None else load_catalog()
     unique_ids = list(dict.fromkeys(ids))  # de-dupe, preserve order; repeats would download twice
+
+    def _pull_or_capture(id_):
+        try:
+            return pull(id_, catalog=cat, download_fn=download_fn), None
+        except Exception as exc:
+            if errors == "raise":
+                raise
+            return None, exc
+
     with ThreadPoolExecutor(max_workers=8) as pool:
-        series = pool.map(lambda id_: pull(id_, catalog=cat, download_fn=download_fn), unique_ids)
-        return dict(zip(unique_ids, series))
+        results = list(pool.map(_pull_or_capture, unique_ids))
+
+    return {id_: series for id_, (series, exc) in zip(unique_ids, results) if exc is None}

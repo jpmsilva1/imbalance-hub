@@ -165,3 +165,47 @@ def test_pull_many_preserves_first_occurrence_order(tmp_path):
                         download_fn=lambda blob_path, revision: paths[blob_path])
 
     assert list(result.keys()) == ["b:x:1", "a:x:1"]
+
+
+def test_pull_many_raises_by_default_on_bad_id(tmp_path):
+    values = [1.0]
+    blob = _write_blob(tmp_path, values)
+    catalog = pd.DataFrame([{
+        "id": "a:x:1", "blob_path": "a.parquet", "hf_revision": "main", "content_hash": _content_hash(values),
+    }])
+
+    with pytest.raises(KeyError):
+        pull_many(["a:x:1", "missing:id:1"], catalog=catalog,
+                   download_fn=lambda blob_path, revision: blob)
+
+
+def test_pull_many_skip_returns_only_successes():
+    values = [1.0]
+    catalog = pd.DataFrame([{
+        "id": "a:x:1", "blob_path": "a.parquet", "hf_revision": "main", "content_hash": _content_hash(values),
+    }])
+
+    result = pull_many(["a:x:1", "missing:id:1"], catalog=catalog, errors="skip",
+                        download_fn=lambda blob_path, revision: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    assert result == {}
+
+
+def test_pull_many_skip_keeps_good_ids_when_others_fail(tmp_path):
+    values = [1.0, 2.0]
+    blob = _write_blob(tmp_path, values)
+
+    catalog = pd.DataFrame([{
+        "id": "a:x:1", "blob_path": "a.parquet", "hf_revision": "main", "content_hash": _content_hash(values),
+    }])
+
+    result = pull_many(["a:x:1", "missing:id:1"], catalog=catalog, errors="skip",
+                        download_fn=lambda blob_path, revision: blob)
+
+    assert list(result.keys()) == ["a:x:1"]
+    assert result["a:x:1"].tolist() == values
+
+
+def test_pull_many_rejects_invalid_errors_value():
+    with pytest.raises(ValueError):
+        pull_many(["a:x:1"], catalog=pd.DataFrame(), errors="ignore")
