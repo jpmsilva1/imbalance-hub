@@ -11,6 +11,9 @@ Those come from third-party sources with their own, differing terms. See
 (Monash/Zenodo archive under CC BY 4.0, M4 competition data with no license
 declared, TSLib's bundled CSVs with code under MIT but data terms unstated).
 
+`catalog/series.csv` has a `license` column (`cc-by-4.0` / `unlicensed` / `unknown`)
+so you can filter programmatically, e.g. `catalog[catalog.license == "cc-by-4.0"]`.
+
 If you plan to use a specific series commercially or redistribute it
 standalone, verify that series' actual source collection rather than relying
 on this summary.
